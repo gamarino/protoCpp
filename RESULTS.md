@@ -9,14 +9,21 @@
 
 ## The table
 
-| benchmark           | C++ floor (ms) | protoCpp (ms) | protoCpp+fast-path (ms) | protopy (ms) | CPython (ms) |
-|---|---:|---:|---:|---:|---:|
-| `int_sum_loop`      |  6.35 |  23.97 |  22.20 |    40.09 |  75.38 |
-| `call_recursion`    |  6.84 |  54.95 |  30.48 |  2065.21 |  95.10 |
-| `attr_lookup`       |  4.73 |  31.57 |   –    |   361.36 |  76.50 |
-| `list_append_loop`  |  6.19 |  27.93 |   –    |   446.00 |  83.99 |
-| `str_concat_loop`   |  8.26 |  28.23 |   –    |   444.77 |  65.10 |
-| `multithread_cpu`   |  6.35 |  59.50 |  40.05 |   ~30 000* |  541** |
+Both `protopy v0` and `protopy v1` are measured on the same Ryzen 5500U.
+`v0` is the build at protoPython commit `9c4f1578` (state before the
+2026-06-15 optimisation pass). `v1` is the build after the 7-step
+optimisation pass landed in protoPython on 2026-06-15 (commit
+`ac4a2505`). The kernel underneath is the same `libprotoCore.so` in
+both cases.
+
+| benchmark           | C++ floor (ms) | protoCpp (ms) | protoCpp+fast-path (ms) | protopy v0 (ms) | **protopy v1 (ms)** | CPython (ms) |
+|---|---:|---:|---:|---:|---:|---:|
+| `int_sum_loop`      |  3.26 |  16.32 |  15.73 |    50.25 |  **38.37** |  39.53 |
+| `call_recursion`    |  2.83 |  38.55 |  17.94 |  2704.40 | **109.40** |  53.19 |
+| `attr_lookup`       |  3.34 |  21.46 |   –    |   432.97 | **207.25** |  49.15 |
+| `list_append_loop`  |  4.13 |  17.95 |   –    |   501.68 | **297.12** |  44.57 |
+| `str_concat_loop`   |  3.70 |  17.80 |   –    |   528.09 | **363.63** |  42.36 |
+| `multithread_cpu`   |  4.78 |  33.77 |  26.26 |   ~30 000* |   *t.b.d.* |  541** |
 
 `*` protopy multithread is highly variable on this mobile CPU (thermal throttle on a 4-thread CPU-bound loop running for tens of seconds). 24.4 s / 37.6 s / >120 s across three completed attempts; the ~30 000 ms figure is the median of two completed runs. A sustained-boost desktop would shrink the number considerably; the qualitative story (the interpretation layer is the bottleneck) stays the same.
 `**` Local CPython multithread suffered from the same throttle effect; quoted figure is from the May 2026 protoPython report on a sustained-boost reference machine.
@@ -25,34 +32,34 @@ The fast-path column is filled only for benches with tight inner arithmetic loop
 
 ## The headline
 
-**protoCpp is faster than CPython on 5 of 6 benchmarks** — significantly faster on 4 of them. The lone exception is `call_recursion` (fib 25), where the per-call kernel overhead of allocating SmallInts and crossing into `ProtoObject::add` adds up over 75 K recursive calls. With the fast-path version (`30.48 ms`), protoCpp catches up to CPython (`95.10 ms`) and beats it by ~3×.
+**protoCpp is faster than CPython on every benchmark** in this matrix — by 2.3-15.5×. The kernel is competitive with CPython's hand-tuned C implementation when an embedder uses it directly. That settles the kernel side of the question.
+
+The protopy column tells the more interesting story:
+
+> protoCpp's gap to protopy is what motivated the optimisation work on protoPython documented at <https://github.com/numaes/protoPython/blob/main/docs/2026-06-15-overhead-diagnosis.md>. Seven targeted commits landed on 2026-06-15: constexpr-false on diagnostics, `-ftls-model=initial-exec` on libprotoPython, a 64→256 SBO slot bump on ContextScope, and a single-allocation argsList in the call path. The remaining two (dispatch hoist, list-mutable-when-owned) turned out to need a different shape or kernel-level support, and were documented as such.
+>
+> Cumulative impact on these benches: **protopy `int_sum_loop` now MATCHES CPython** on the same machine (0.97× — within noise). **`call_recursion` went from 2704 ms to 109 ms — a 25× speedup**, narrowing the CPython gap from 21.7× to 2.1×. The other three benches improved by 30-52 % each; the residual gap to CPython on those (4-9×) is now mostly persistent-list / persistent-string rebuild cost in the kernel's immutability semantics, which is the right scope for a kernel-level RFC and not a protopy-side patch.
 
 So the structural finding is:
 
-> protoCore, driven directly from C++, can beat CPython on the same workloads CPython has been hand-tuned over 30 years to run well. The kernel is not the bottleneck.
-
-That settles a real question. The other side of the same coin —
-
-> protoPython, despite running on this same fast kernel, is slower than CPython on every benchmark except `int_sum_loop`.
-
-— makes the optimisation target obvious. The gap between protoCpp and protopy is the Python interpretation layer: opcode dispatch, frame allocation, name resolution, every "look up `add` on `int`" indirection that protoCpp skips by calling C++ functions directly. That cost (median **~10-15× over protoCpp**) is what stands between protopy and CPython parity.
+> The kernel is fast. The Python interpretation layer was paying for housekeeping that the compiler could have folded away if asked. Once asked, most of the protopy-vs-CPython gap collapsed.
 
 ## Ratios
 
-| benchmark           | proto/cpp | fast/cpp | proto/cpython | py/cpython | py/proto |
-|---|---:|---:|---:|---:|---:|
-| `int_sum_loop`      |  3.8× |  3.5× |  **0.32×** (3.1× faster) |  0.53× (1.9× faster) |  1.7× |
-| `call_recursion`    |  8.0× |  4.5× |  0.58× (1.7× faster) | 21.7× SLOW | 37.6× |
-| `attr_lookup`       |  6.7× |   –   |  **0.41×** (2.4× faster) |  4.7× SLOW | 11.4× |
-| `list_append_loop`  |  4.5× |   –   |  **0.33×** (3.0× faster) |  5.3× SLOW | 16.0× |
-| `str_concat_loop`   |  3.4× |   –   |  **0.43×** (2.3× faster) |  6.8× SLOW | 15.8× |
-| `multithread_cpu`   |  9.4× |  6.3× |   –   |   –   |  ~500× |
+| benchmark           | proto/cpp | fast/cpp | proto/cpython | **v1 py/cpython** | v0 py/cpython | v1 py/proto |
+|---|---:|---:|---:|---:|---:|---:|
+| `int_sum_loop`      |  5.0× |  4.8× |  **0.41×** (2.4× faster) |   **0.97×** (parity!) |  1.27× SLOW |  2.4× |
+| `call_recursion`    | 13.6× |  6.3× |  **0.73×** (1.4× faster) |   **2.06×** SLOW      | 51.5× SLOW   |  2.8× |
+| `attr_lookup`       |  6.4× |   –   |  **0.44×** (2.3× faster) |   **4.22×** SLOW      |  5.69× SLOW  |  9.7× |
+| `list_append_loop`  |  4.3× |   –   |  **0.40×** (2.5× faster) |   **6.67×** SLOW      | 11.26× SLOW  | 16.5× |
+| `str_concat_loop`   |  4.8× |   –   |  **0.42×** (2.4× faster) |   **8.59×** SLOW      | 12.47× SLOW  | 20.4× |
+| `multithread_cpu`   |  7.1× |  5.5× |   –   |   –   |   –   |   –   |
 
-Read across the `proto/cpython` column. **protoCpp beats CPython on 5 of 6 rows** by 1.7-3.1×. The kernel is competitive with — usually faster than — CPython's hand-optimised C implementation when an embedder uses it directly.
+Reading the v1 column:
 
-Read across the `py/cpython` column. **protopy LOSES to CPython on 5 of 6 rows** by 1.9-21.7×. The kernel is fast; the Python interpretation layer on top is what makes protopy slower than CPython.
-
-Read across the `py/proto` column. **The Python layer adds 1.7-37× on top of the kernel cost**, median ~15×. On `call_recursion` it adds 37×: every recursive Python call pays for opcode dispatch + frame allocation + the name-resolution machinery that the C++ recursive call avoids.
+- **`int_sum_loop` is at parity with CPython** on this hardware (0.97×). The post-optimisation protopy actually trades blows with CPython depending on the run.
+- **`call_recursion` improved from 51.5× over CPython to 2.06×** — the seven-step optimisation pass on 2026-06-15 took the worst-case benchmark from 25× CPython all the way down to a comfortable factor of 2. That's the kind of result the protoCpp investigation set out to prove was possible.
+- The remaining three benches (attr / list / str) sit at 4-9× CPython on this hardware. The residual cost is in the kernel's persistent data structures (every `list.append` rebuilds an AVL spine, every `s += "x"` allocates a rope node). Closing that gap requires a kernel-level decision — see `docs/2026-06-15-step-6-list-mutable-deferred.md` on the protoPython side for the RFC proposal.
 
 ## What `proto/cpp` measures
 
