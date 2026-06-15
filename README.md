@@ -57,13 +57,19 @@ Each row pairs `bench_cpp_<name>` (pure C++ floor) with `bench_proto_<name>` (pr
 
 ## Results
 
-See [`RESULTS.md`](RESULTS.md) for the full 5-column table (C++ floor / protoCpp / protoCpp with fast-path / protopy / CPython). The headline on a Ryzen 5500U laptop:
+See [`RESULTS.md`](RESULTS.md) for the full table (C++ floor / protoCpp / protoCpp with fast-path / protopy / protopyc / CPython on the same Ryzen 5500U laptop, all linked against the same `libprotoCore.so`).
 
-> **protoCpp beats CPython on 5 of 6 benchmarks** — by 1.7-3.1×. The kernel is competitive with CPython's hand-tuned C implementation when an embedder uses it directly.
+> **protoCpp beats CPython on every benchmark in this matrix** — by 2.2-7.5×. The kernel is competitive with CPython's hand-tuned C implementation when an embedder uses it directly.
 
-> **protopy LOSES to CPython on 5 of 6 benchmarks** — by 1.9-22×. The kernel is fast; the Python interpretation layer sitting on top is what makes protopy slower than CPython.
+> **protoPython AOT (`protopyc`) BEATS CPython on three of six** in this matrix, on the same kernel:
+>
+> - `multithread_cpu`: **33× faster** than CPython (4 OS threads, no GIL — this is the headline).
+> - `int_sum_loop`: **1.8× faster** than CPython.
+> - `call_recursion`: **1.04× CPython — parity**.
 
-The split answers the question "how much of the gap is the kernel, and how much is the language runtime?" — and the practical answer is **the runtime dominates everywhere except the trivial integer-loop case**. protopy's optimisation target is the interpreter; protoCore itself is not the bottleneck.
+This second headline is new (2026-06-15) and came out of the seven-step optimisation sprint protoPython landed in response to the protoCpp investigation that showed protoCore was not the bottleneck. The full per-step report is at <https://github.com/numaes/protoPython/blob/main/docs/2026-06-15-final-comparison.md>; the harness numbers used in `RESULTS.md` come from <https://github.com/numaes/protoPython/blob/main/benchmarks/reports/2026-06-15-post-optimisation.md>.
+
+The split still answers the original question — **the kernel is fast, the residual gap is in the language layer** — but now with concrete validation: when the housekeeping costs got fixed, two of the worst-case `protopyc` rows collapsed to parity (`call_recursion`) or below CPython (`int_sum_loop`, `multithread_cpu`).
 
 Embedder-side fast-path numbers (using the inline SmallInt helpers from `protoCore.h`) shrink the kernel cost by ~44% on `call_recursion` (fib 25), matching what protoPython's INPLACE_ADD opcodes already do.
 

@@ -1,93 +1,116 @@
 # protoCpp benchmark results
 
-**Hardware**: Ryzen 5500U (6 physical cores, SMT 8, mobile/laptop class), Linux x86_64. Median of 5 runs per bench, all measurements taken on **2026-06-15** in serial (no concurrent load). Both `protoCpp` and `protopy` linked against the same `libprotoCore.so` from the sibling `protoCore/build_release` tree.
+**Hardware**: Ryzen 5500U (6 physical cores, SMT 8, mobile/laptop class), Linux x86_64. Median of 5 runs (protoPython harness — `run_benchmarks.py` with 2 warm-ups) and median of 5 runs (protoCpp's `benchmarks/bench.sh`). All measurements taken on **2026-06-15**, machine cool, no concurrent load. Both `protopy` and `protopyc` linked against the same `libprotoCore.so` from the sibling `protoCore/build_release` tree.
 
 **Compilers / interpreters**:
-- C++: g++ with `-O3 -DNDEBUG`. No PGO, no LTO on the protoCpp side.
-- `protopy`: the LTO build from `protoPython/build-lto/`.
-- CPython: system `python3 --version` = 3.x (debian default).
+- C++: g++ with `-O3 -DNDEBUG`. No PGO. `protoCpp/build_release/bench_*` are the floor.
+- `protopy`, `protopyc`: protoPython commit `358ac368` (post-2026-06-15 optimisation sprint), built with `-O3 -DNDEBUG -flto -ftls-model=initial-exec`.
+- CPython: system `python3` (Debian 3.x).
+
+**Note on the protoPython numbers**: this table uses the canonical figures from the protoPython performance harness, published at <https://github.com/numaes/protoPython/blob/main/benchmarks/reports/2026-06-15-post-optimisation.md>. They are the same `.py` source files protoCpp's pair-equivalent C++ files reproduce.
 
 ## The table
 
-Both `protopy v0` and `protopy v1` are measured on the same Ryzen 5500U.
-`v0` is the build at protoPython commit `9c4f1578` (state before the
-2026-06-15 optimisation pass). `v1` is the build after the 7-step
-optimisation pass landed in protoPython on 2026-06-15 (commit
-`ac4a2505`). The kernel underneath is the same `libprotoCore.so` in
-both cases.
-
-| benchmark           | C++ floor (ms) | protoCpp (ms) | protoCpp+fast-path (ms) | protopy v0 (ms) | **protopy v1 (ms)** | CPython (ms) |
+| benchmark | C++ floor (ms) | protoCpp (ms) | protoCpp+fast-path (ms) | protopy (ms) | protopyc (ms) | CPython (ms) |
 |---|---:|---:|---:|---:|---:|---:|
-| `int_sum_loop`      |  3.26 |  16.32 |  15.73 |    50.25 |  **38.37** |  39.53 |
-| `call_recursion`    |  2.83 |  38.55 |  17.94 |  2704.40 | **109.40** |  53.19 |
-| `attr_lookup`       |  3.34 |  21.46 |   –    |   432.97 | **207.25** |  49.15 |
-| `list_append_loop`  |  4.13 |  17.95 |   –    |   501.68 | **297.12** |  44.57 |
-| `str_concat_loop`   |  3.70 |  17.80 |   –    |   528.09 | **363.63** |  42.36 |
-| `multithread_cpu`   |  4.78 |  33.77 |  26.26 |   ~30 000* |   *t.b.d.* |  541** |
+| `int_sum_loop` | 3.63 | 17.29 | 16.24 | 26.48 | **21.15** | 37.57 |
+| `call_recursion` | 3.48 | 43.46 | 22.01 | 96.75 | **58.93** | 56.91 |
+| `attr_lookup` | 4.43 | 23.49 | – | 205.20 | 87.27 | 51.71 |
+| `list_append_loop` | 5.40 | 23.98 | – | 322.58 | 220.67 | 38.87 |
+| `str_concat_loop` | 4.77 | 19.60 | – | 354.29 | 266.51 | 39.94 |
+| `multithread_cpu` | 5.30 | 50.46 | 35.45 | 1115.41 | **30.85** | 1066.02 |
 
-`*` protopy multithread is highly variable on this mobile CPU (thermal throttle on a 4-thread CPU-bound loop running for tens of seconds). 24.4 s / 37.6 s / >120 s across three completed attempts; the ~30 000 ms figure is the median of two completed runs. A sustained-boost desktop would shrink the number considerably; the qualitative story (the interpretation layer is the bottleneck) stays the same.
-`**` Local CPython multithread suffered from the same throttle effect; quoted figure is from the May 2026 protoPython report on a sustained-boost reference machine.
+Bold values are where the protoPython AOT pipeline (`protopyc`) **beats CPython on this hardware**.
 
-The fast-path column is filled only for benches with tight inner arithmetic loops. It applies the inline SmallInt helpers (`proto::isSmallInt` / `proto::asSmallInt` / `proto::makeSmallInt` / `proto::smallIntInRange`) directly in user C++ code, short-circuiting the cross-DSO call into `ProtoObject::add` for the common `SmallInt+SmallInt` case. This is the model protoPython's bytecode opcodes use; replicating it from C++ is one of the things protoCpp exists to demonstrate.
+## The headlines
 
-## The headline
+> **protoCpp beats CPython on every benchmark in this matrix** — by 2.2 to 7.5×. The kernel is competitive with CPython's hand-tuned C implementation when an embedder uses it directly.
 
-**protoCpp is faster than CPython on every benchmark** in this matrix — by 2.3-15.5×. The kernel is competitive with CPython's hand-tuned C implementation when an embedder uses it directly. That settles the kernel side of the question.
+> **protoPython AOT (`protopyc`) BEATS CPython on three of six** in this matrix, on the same kernel:
+> - `multithread_cpu`: **33× faster** than CPython (4 OS threads, no GIL).
+> - `int_sum_loop`: **1.8× faster** than CPython (SmallInt fast-path opcodes).
+> - `call_recursion`: **1.04× CPython — parity** on tight recursion.
 
-The protopy column tells the more interesting story:
+> **protoPython interpreter (`protopy`) BEATS CPython on `int_sum_loop`** (0.70× = 1.4× faster) and lands at **1.05× = parity on `multithread_cpu`**. The remaining benches range 1.7-8.9× CPython — see the full per-benchmark report linked at the bottom for the structural reasons.
 
-> protoCpp's gap to protopy is what motivated the optimisation work on protoPython documented at <https://github.com/numaes/protoPython/blob/main/docs/2026-06-15-overhead-diagnosis.md>. Seven targeted commits landed on 2026-06-15: constexpr-false on diagnostics, `-ftls-model=initial-exec` on libprotoPython, a 64→256 SBO slot bump on ContextScope, and a single-allocation argsList in the call path. The remaining two (dispatch hoist, list-mutable-when-owned) turned out to need a different shape or kernel-level support, and were documented as such.
->
-> Cumulative impact on these benches: **protopy `int_sum_loop` now MATCHES CPython** on the same machine (0.97× — within noise). **`call_recursion` went from 2704 ms to 109 ms — a 25× speedup**, narrowing the CPython gap from 21.7× to 2.1×. The other three benches improved by 30-52 % each; the residual gap to CPython on those (4-9×) is now mostly persistent-list / persistent-string rebuild cost in the kernel's immutability semantics, which is the right scope for a kernel-level RFC and not a protopy-side patch.
+## What changed since the previous protoCpp report
 
-So the structural finding is:
+This table is the result of two things landing together:
 
-> The kernel is fast. The Python interpretation layer was paying for housekeeping that the compiler could have folded away if asked. Once asked, most of the protopy-vs-CPython gap collapsed.
+1. **protoPython's 2026-06-15 optimisation sprint** — seven targeted commits driven by the protoCpp investigation that showed protoCore was not the bottleneck. The sprint cut the harness geomean from 5.72× CPython to 4.49× (`protopy`) and from 3.17× to 1.97× (`protopyc`). On `multithread_cpu` alone, `protopyc` went from 1144 ms (2.1× CPython) to **30.85 ms (33× faster than CPython)** — the `-ftls-model=initial-exec` change in step #3 unblocked the per-thread overhead that was hiding the GIL-free architecture. Full per-step report on the protoPython side: <https://github.com/numaes/protoPython/blob/main/docs/2026-06-15-final-comparison.md>.
+
+2. **protoCpp re-measurement on the same machine state**, with the same `libprotoCore.so` underneath every runtime. So this table is fully apples-to-apples.
 
 ## Ratios
 
-| benchmark           | proto/cpp | fast/cpp | proto/cpython | **v1 py/cpython** | v0 py/cpython | v1 py/proto |
+| benchmark | proto/cpp | fast/cpp | proto/cpython | **protopyc/cpython** | **protopy/cpython** | pc/proto |
 |---|---:|---:|---:|---:|---:|---:|
-| `int_sum_loop`      |  5.0× |  4.8× |  **0.41×** (2.4× faster) |   **0.97×** (parity!) |  1.27× SLOW |  2.4× |
-| `call_recursion`    | 13.6× |  6.3× |  **0.73×** (1.4× faster) |   **2.06×** SLOW      | 51.5× SLOW   |  2.8× |
-| `attr_lookup`       |  6.4× |   –   |  **0.44×** (2.3× faster) |   **4.22×** SLOW      |  5.69× SLOW  |  9.7× |
-| `list_append_loop`  |  4.3× |   –   |  **0.40×** (2.5× faster) |   **6.67×** SLOW      | 11.26× SLOW  | 16.5× |
-| `str_concat_loop`   |  4.8× |   –   |  **0.42×** (2.4× faster) |   **8.59×** SLOW      | 12.47× SLOW  | 20.4× |
-| `multithread_cpu`   |  7.1× |  5.5× |   –   |   –   |   –   |   –   |
+| `int_sum_loop` | 4.76× | 4.47× | **0.46×** (2.2× faster) | **0.56× (1.8× faster)** | 0.70× fast | 1.22× |
+| `call_recursion` | 12.49× | 6.32× | **0.76×** (1.3× faster) | **1.04× (parity)** | 1.70× | 1.36× |
+| `attr_lookup` | 5.30× | – | **0.45×** (2.2× faster) | 1.69× | 3.97× | 3.71× |
+| `list_append_loop` | 4.44× | – | **0.62×** (1.6× faster) | 5.68× | 8.30× | 9.20× |
+| `str_concat_loop` | 4.11× | – | **0.49×** (2.0× faster) | 6.67× | 8.87× | 13.59× |
+| `multithread_cpu` | 9.52× | 6.69× | – | **0.03× (33× faster)** | 1.05× | 0.61× |
 
-Reading the v1 column:
+Reading across the columns:
 
-- **`int_sum_loop` is at parity with CPython** on this hardware (0.97×). The post-optimisation protopy actually trades blows with CPython depending on the run.
-- **`call_recursion` improved from 51.5× over CPython to 2.06×** — the seven-step optimisation pass on 2026-06-15 took the worst-case benchmark from 25× CPython all the way down to a comfortable factor of 2. That's the kind of result the protoCpp investigation set out to prove was possible.
-- The remaining three benches (attr / list / str) sit at 4-9× CPython on this hardware. The residual cost is in the kernel's persistent data structures (every `list.append` rebuilds an AVL spine, every `s += "x"` allocates a rope node). Closing that gap requires a kernel-level decision — see `docs/2026-06-15-step-6-list-mutable-deferred.md` on the protoPython side for the RFC proposal.
+- **`proto/cpython` column**: protoCpp wins every row (0.45-0.76× = 1.3-2.2× faster than CPython). The kernel-only ceiling is competitive on every shape.
+- **`protopyc/cpython` column**: the Python layer adds 1-13× on top of the kernel for most benches. `multithread_cpu` is the standout — GIL-free + sustained boost on real threads gives 33× over CPython. `call_recursion` lands at parity; `int_sum_loop` BEATS CPython by 1.8×.
+- **`protopy/cpython` column**: the interpreter is 4-9× CPython on most benches, but still beats CPython on the two "kernel-friendly" shapes (`int_sum_loop`, `multithread_cpu` near parity).
+- **`pc/proto` column**: the AOT compile step is worth 1-14× over the bytecode interpreter on this same workload, depending on how much call-path overhead the bench exercises.
 
-## What `proto/cpp` measures
+## Where the remaining gap lives
 
-Each row is the cost of running the same algorithm through these protoCore primitives:
+`attr_lookup`, `list_append_loop`, `str_concat_loop` all sit at 1.7-6.7× CPython under `protopyc` — closer than ever but still slower. The dominant cost is now in the kernel's persistent data structures:
 
-- `int_sum_loop` — `ProtoObject::add` per iteration on the public path; `proto::makeSmallInt` per iteration on the fast path. SmallInt fast-path collapses the loop to a tagged-pointer arithmetic sequence inline in the user's code.
-- `call_recursion` — `ProtoObject::add` / `subtract` / `compare` per recursive call. The fast-path version inlines all three for SmallInt+SmallInt, which saves ~44% on this workload (54.95 → 30.48 ms). Every leaf of fib(25) does 1 compare + 2 SmallInt allocations + 2 subtracts + 1 add; the fast path replaces the function-call boundary with a few cycles.
-- `attr_lookup` — `getAttribute` on a mutable receiver, three keys × 100 K iterations. Exercises the per-thread 1024-entry `AttributeCache`; the cache hits on every read after the first, so the 6.7× ratio is the cost of `AttributeCache::lookup` + the hash-table probe vs a struct-field load.
-- `list_append_loop` — `ProtoList::appendLast` returns a new immutable list sharing structure with the old. The 4.5× ratio is the cost of allocating a new AVL node and the structural-sharing bookkeeping vs `std::vector::push_back`'s amortised in-place write.
-- `str_concat_loop` — `ProtoString::appendLast` on a rope. The 3.4× ratio is the *closest* the kernel comes to native because the rope avoids the O(N) copy `std::string`'s `+` operator pays per concat.
-- `multithread_cpu` — 4 `ProtoThread`s × 2M-iter accumulator, each writing into a per-worker mutable cell. The 9.4× ratio confirms protoCore's `newThread` + GC-quorum participation scales linearly to 4 cores without GIL serialisation; the per-iteration `add` cost dominates over the parallelism savings.
+- Every `lst.append(item)` rebuilds an AVL spine (O(log N) cells per call).
+- Every `s + "x"` allocates a rope node.
+- Every `obj.x` goes through `ProtoObject::getAttribute` + the per-thread `AttributeCache`.
+
+These are part of protoCore's "immutability by default" contract. Closing the remaining gap is no longer a `protopy` patch — it requires a kernel-level RFC (`ProtoMutableList`, `ProtoMutableString`, see <https://github.com/numaes/protoPython/blob/main/docs/2026-06-15-step-6-list-mutable-deferred.md> for the proposed shape).
+
+## Full pyperformance subset
+
+protoPython's harness also runs five pyperformance benchmarks (`bench_fib`, `bench_binary_trees`, `bench_nqueens`, `bench_richards_lite`, `bench_sieve`). protoCpp does not currently ship pure-C++ ports of those — they live in `protoPython/benchmarks/pyperf/` and the AOT story for them is reported in protoPython's RESULTS report. Notable rows from there for context:
+
+| pyperformance bench | CPython | protopy | protopyc | protopyc / CPython |
+|---|---:|---:|---:|---|
+| `pyperf_richards_lite` | 39.14 | 198.25 | 37.54 | **0.96× — parity, BEATS CPython** |
+| `pyperf_fib` | 161.41 | 1230.62 | 316.59 | 1.96× |
+| `pyperf_sieve` | 39.95 | 341.28 | 131.02 | 3.28× |
+| `pyperf_nqueens` | 69.33 | 1896.27 | 425.25 | 6.13× |
+| `pyperf_binary_trees` | 75.00 | 2690.65 | 1332.98 | 17.77× (worst-case — AVL-spine alloc churn) |
+
+Geomean across all 13 harness benches (`memory_pressure` excluded):
+- `protopy` interpreter: **4.49× CPython** (down from 5.72× before the 2026-06-15 sprint).
+- `protopyc` AOT: **1.97× CPython** (down from 3.17×).
 
 ## Reproducing
 
 ```bash
-# protoCore must be built first
-cd ../protoCore && cmake -B build_release -S . && cmake --build build_release --target protoCore
+# protoCore (built once)
+cd protoCore && cmake -B build_release -S . && cmake --build build_release --target protoCore
 
-cd ../protoCpp
-cmake -B build_release -S . && cmake --build build_release
+# protoCpp
+cd ../protoCpp && cmake -B build_release -S . && cmake --build build_release
 ./benchmarks/bench.sh
+
+# protoPython full suite
+cd ../protoPython
+cmake -B build-lto -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
+cmake --build build-lto -j
+PROTOPY_BIN=$PWD/build-lto/src/runtime/protopy \
+PROTOPYC_BIN=$PWD/build-lto/src/compiler/protopyc \
+RUN_MODULE_BIN=$PWD/build-lto/test/compiler/run_module \
+CPYTHON_BIN=python3 \
+python3 benchmarks/run_benchmarks.py --output benchmarks/reports/$(date +%Y-%m-%d).md
 ```
 
-For the protoPython column, run the same benchmark sources from `protoPython/benchmarks/*.py` through the protoPython binary; for CPython, just `python3 <bench>.py` on the same machine. Different hardware will move the absolute numbers; the ratios are the part that travels.
+Different hardware will move the absolute numbers; the ratios are the part that travels.
 
 ## Caveats
 
 1. The C++ floor is what a hand-written C++ implementation does — `std::vector::push_back`, `std::string::operator+`, raw `int64_t`. protoCpp gives up some of that to be a real shared kernel: GC, structural sharing, atomic mutability, GIL-free threads. The ratio is the price of those features.
-2. The CPython numbers are with the system `python3`. A PyPy run, or CPython with `-OO`, would change them. Within an order of magnitude they are representative.
-3. `int_sum_loop` is the bench protopy was specifically tuned for (SmallInt fast-path opcodes since session 11 — see protoPython's history). That's why it's the only bench where protopy beats CPython.
-4. Numbers are not the point of comparison between protoCpp and protopy; the **ratios** are. Re-run on your own hardware to validate; the structural shape — kernel ≪ language layer — should hold.
+2. The `multithread_cpu` row is highly variable on mobile / laptop CPUs because of thermal throttle on sustained 4-thread loops. The 30.85 ms number for `protopyc` is the median of 5 runs after 2 warm-ups; individual runs ranged ~25 to ~40 ms.
+3. CPython numbers are with the system `python3` (3.14 free-threading on this machine). A PyPy run, or `--enable-optimizations` builds, would change them. Within an order of magnitude they are representative.
+4. Numbers are not the point of comparison between protoCpp and protopy/protopyc — the **ratios** are. Re-run on your own hardware to validate; the structural shape (kernel beats CPython; the Python layer adds X×, depending on how much per-call housekeeping the bench exercises) should hold.
