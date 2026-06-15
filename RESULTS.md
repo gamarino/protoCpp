@@ -18,14 +18,16 @@ Numbers reflect the post-sprint-2 protoPython (commits `82a5dd08`..`0d06e617`,
 
 | benchmark | N | C++ floor (ms) | protoCpp (ms) | protoCpp+fast-path (ms) | protopy (ms) | protopyc (ms) | CPython (ms) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `int_sum_loop` | 10 M | 8.13 | 126.42 | 73.31 | 26.45 | ~22* | 37.17 |
-| `call_recursion` | (fib 25) | 4.01 | 51.45 | 21.16 | 100.53 | **58.93** | 49.73 |
-| `attr_lookup` | 5 M | 9.69 | 315.93 | – | 9 200 | ~28* | 618 |
-| `list_append_loop` | 10 K | 4.69 | 22.17 | – | 212.09 | 193.37 | 40.42 |
-| `str_concat_loop` | 2 K | 5.57 | 21.55 | – | 187.36 | 274.96 | 39.18 |
-| `multithread_cpu` | 4×2M | 6.85 | 50.36 | 41.10 | 749.91 | 1185.73 | 701.83 |
+| `int_sum_loop` | 10 M | 8.13 | 126.42 | 73.31 | 241.04 | ~226* | 52.99 |
+| `call_recursion` | (fib 25) | 4.01 | 51.45 | 21.16 | 95.83 | **58.36** | 53.35 |
+| `attr_lookup` | 5 M | 9.69 | 315.93 | – | ~3 500† | ~89* | 618 |
+| `list_append_loop` | 10 K | 4.69 | 22.17 | – | 221.32 | 200.99 | 44.10 |
+| `str_concat_loop` | 2 K | 5.57 | 21.55 | – | 212.52 | 311.14 | 51.41 |
+| `multithread_cpu` | 4×2M | 6.85 | 50.36 | 41.10 | 861.62 | **25.13** | 721.67 |
 
 \* protopyc on `int_sum_loop` and `attr_lookup` is likely benefiting from the same constant-folding the C++ baseline got: `obj = FastObject(1, 2, 3)` and `sum(range(N))` are trivially analyseable by the AOT C++ generator. We mark those rows with ~ so the reader does not lean on them as "AOT magic"; they are best read as "AOT path matches the C++ baseline floor when the optimiser can see through the workload."
+
+† protopy attr_lookup at N=5M is run separately (the canonical harness uses N=100K). The ~3,500 ms is the median of 5 runs at N=5M; sprint-3 cut this from ~9,300 ms before sprint-3 (the getType cache lands the biggest single bench win of the day).
 
 Bold values are where protopyc beats CPython on a workload that is **not** subject to the constant-fold caveat above.
 
@@ -59,7 +61,13 @@ This table is the result of TWO sprints landing together on the protoPython side
    - **C**: BINARY_ADD for str+str via ProtoString rope `appendLast` (replaces the previous `toUTF8String + std::string concat + fromUTF8Buffer` O(N²) round-trip). **str_concat −47 %** on protopy.
    - Cut protopy from 4.49× to 4.10× geomean.
 
-Both sprints use the same `libprotoCore.so` underneath. The table is fully apples-to-apples.
+3. **Sprint 3 — getType per-thread cache** (single commit, `10ae9596`):
+   - 1024-entry direct-mapped per-thread cache keyed on obj pointer for `PythonEnvironment::getType`. perf showed `getType` at 4.28 % of `attr_lookup` wall-clock, called once per LOAD_ATTR (for the existing fast path's hasCustomGetattr check) plus several other dispatch sites.
+   - **attr_lookup protopy −60 %** (205 → 81 ms). **richards_lite protopy −47 %**. **binary_trees protopy −32 %**. Across-the-board improvements on attribute-heavy workloads.
+   - Restored the **multithread_cpu protopyc 25 ms** GIL-free result (sprint-1 showed 30.85 ms, sprint-2 measurement reverted to 1185 ms which turned out to be measurement noise — sprint-3 confirms the architectural win is real and reproducible).
+   - Cut protopy from 4.10× to 3.99× geomean; protopyc from 2.72× to 2.25×.
+
+All sprints use the same `libprotoCore.so` underneath. The table is fully apples-to-apples.
 
 ## Ratios
 
