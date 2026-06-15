@@ -81,9 +81,25 @@ protoPython's harness also runs five pyperformance benchmarks (`bench_fib`, `ben
 | `pyperf_nqueens` | 69.33 | 1896.27 | 425.25 | 6.13× |
 | `pyperf_binary_trees` | 75.00 | 2690.65 | 1332.98 | 17.77× (worst-case — AVL-spine alloc churn) |
 
-Geomean across all 13 harness benches (`memory_pressure` excluded):
+Geomean across the suite (n=13, with `memory_pressure` excluded — see
+the next paragraph for why):
+
 - `protopy` interpreter: **4.49× CPython** (down from 5.72× before the 2026-06-15 sprint).
 - `protopyc` AOT: **1.97× CPython** (down from 3.17×).
+
+> **`memory_pressure` is reported `[INFO]` and excluded from the geomean.**
+> protoCore and CPython make fundamentally different choices about *when*
+> to free memory: CPython is reference-counted with eager deallocation
+> (free at refcount=0, inline with the mutator); protoCore runs a
+> concurrent tracing collector that defers reclamation until the working
+> set forces it. On the `memory_pressure` workload, CPython's wall time
+> is dominated by the deletion path, while protoPython's is dominated by
+> GC scheduling under stress. Averaging the ratio into the geomean would
+> skew it by ~1.4× per protoPython mode and would mis-represent steady-
+> state throughput. The absolute number stays visible in the protoPython
+> harness report for transparency, but it does not participate in any
+> aggregate. See the footnote in the upstream report for the full
+> rationale.
 
 ## Reproducing
 
