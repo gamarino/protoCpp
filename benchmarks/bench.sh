@@ -39,19 +39,30 @@ median_ms() {
         END { print a[int((n + 1) / 2)] }'
 }
 
-printf "%-22s %-10s %-10s %-10s\n" "bench" "cpp(ms)" "proto(ms)" "proto/cpp"
-echo   "---------------------------------------------------------"
+printf "%-20s %-9s %-9s %-9s %-9s %-9s\n" \
+    "bench" "cpp(ms)" "proto(ms)" "fast(ms)" "proto/cpp" "fast/cpp"
+echo   "----------------------------------------------------------------------"
 
 for b in "${BENCHES[@]}"; do
     cpp_bin="$BUILD/bench_cpp_$b"
     pr_bin="$BUILD/bench_proto_$b"
+    fast_bin="$BUILD/bench_proto_fast_$b"
     if [[ ! -x "$cpp_bin" || ! -x "$pr_bin" ]]; then
-        printf "%-22s ** missing binary **\n" "$b"
+        printf "%-20s ** missing binary **\n" "$b"
         continue
     fi
     cpp_ms=$(median_ms "$cpp_bin")
     pr_ms=$(median_ms "$pr_bin")
-    ratio=$(awk -v c="$cpp_ms" -v p="$pr_ms" 'BEGIN {
+    pr_ratio=$(awk -v c="$cpp_ms" -v p="$pr_ms" 'BEGIN {
         if (c == 0) print "inf"; else printf "%.2fx", p / c }')
-    printf "%-22s %-10s %-10s %-10s\n" "$b" "$cpp_ms" "$pr_ms" "$ratio"
+    if [[ -x "$fast_bin" ]]; then
+        fast_ms=$(median_ms "$fast_bin")
+        fast_ratio=$(awk -v c="$cpp_ms" -v f="$fast_ms" 'BEGIN {
+            if (c == 0) print "inf"; else printf "%.2fx", f / c }')
+    else
+        fast_ms="-"
+        fast_ratio="-"
+    fi
+    printf "%-20s %-9s %-9s %-9s %-9s %-9s\n" \
+        "$b" "$cpp_ms" "$pr_ms" "$fast_ms" "$pr_ratio" "$fast_ratio"
 done

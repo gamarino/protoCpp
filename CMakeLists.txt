@@ -81,6 +81,20 @@ foreach(src ${PROTO_BENCH_SOURCES})
     target_link_libraries(bench_proto_${name} PRIVATE ${PROTOCORE_LIBRARY})
 endforeach()
 
+# proto_fast — SmallInt fast-path variants. They use the inline
+# `proto::isSmallInt` / `proto::asSmallInt` / `proto::makeSmallInt` /
+# `proto::smallIntInRange` helpers from protoCore.h to short-circuit
+# the cross-DSO call into `ProtoObject::add` etc. Only benches with
+# tight numeric inner loops have a fast-path version — list / str /
+# attr would not benefit.
+file(GLOB PROTO_FAST_BENCH_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/proto_fast/*.cpp")
+foreach(src ${PROTO_FAST_BENCH_SOURCES})
+    get_filename_component(name ${src} NAME_WE)
+    add_executable(bench_proto_fast_${name} ${src})
+    target_link_libraries(bench_proto_fast_${name} PRIVATE ${PROTOCORE_LIBRARY})
+endforeach()
+
 message(STATUS "protoCpp ${PROJECT_VERSION}")
 message(STATUS "  protoCore lib: ${PROTOCORE_LIBRARY}")
 message(STATUS "  protoCore inc: ${PROTOCORE_INCLUDE_DIRS}")

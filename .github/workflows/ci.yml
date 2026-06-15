@@ -1,0 +1,70 @@
+name: ci
+
+# Build-only CI. Compiles protoCore, then protoCpp (all examples and
+# every benchmark binary), and runs each example end-to-end. We do NOT
+# run the benchmark suite here — GitHub-hosted runners share CPU with
+# other tenants, so wall-clock numbers from CI would be misleading
+# and the published RESULTS.md numbers stay tied to the local Ryzen
+# 5500U dev box.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout protoCpp
+        uses: actions/checkout@v4
+        with:
+          path: protoCpp
+
+      - name: Checkout protoCore
+        uses: actions/checkout@v4
+        with:
+          repository: numaes/protoCore
+          path: protoCore
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake g++ ninja-build
+
+      - name: Build protoCore
+        working-directory: protoCore
+        run: |
+          cmake -B build_release -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_release --target protoCore
+
+      - name: Build protoCpp
+        working-directory: protoCpp
+        run: |
+          cmake -B build_release -S . -G Ninja
+          cmake --build build_release
+
+      - name: Smoke — run every example
+        working-directory: protoCpp
+        run: |
+          set -e
+          for e in build_release/example_*; do
+            echo "=== $(basename "$e") ==="
+            "$e"
+          done
+
+      - name: Smoke — every benchmark binary at least starts and exits 0
+        working-directory: protoCpp
+        run: |
+          set -e
+          # Each bench prints its own correctness sentinel; just check
+          # it doesn't crash or hang. PROTOCLJ-style "self-report"
+          # rule from sibling repos — don't trust silent success.
+          for b in build_release/bench_*; do
+            bn=$(basename "$b")
+            # Skip multithread benches: they're long and noisy on CI.
+            case "$bn" in *multithread_cpu*) continue ;; esac
+            echo "=== $bn ==="
+            timeout 30 "$b" > /dev/null
+          done
