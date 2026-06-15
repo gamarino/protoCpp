@@ -10,7 +10,7 @@
 using namespace proto;
 
 int main() {
-    constexpr long long N = 100000;
+    constexpr long long N = 5000000;
     ProtoSpace space;
     ProtoContext* ctx = space.rootContext;
 
