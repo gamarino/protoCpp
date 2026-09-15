@@ -1,11 +1,11 @@
 name: ci
 
 # Build-only CI. Compiles protoCore, then protoCpp (all examples and
-# every benchmark binary), and runs each example end-to-end. We do NOT
-# run the benchmark suite here — GitHub-hosted runners share CPU with
+# every benchmark binary), and runs each example end-to-end. The
+# benchmark suite is not run here — GitHub-hosted runners share CPU with
 # other tenants, so wall-clock numbers from CI would be misleading
-# and the published RESULTS.md numbers stay tied to the local Ryzen
-# 5500U dev box.
+# and the published RESULTS.md numbers stay tied to the Ryzen 5 5500U
+# laptop they were measured on.
 
 on:
   push:
@@ -58,9 +58,9 @@ jobs:
         working-directory: protoCpp
         run: |
           set -e
-          # Each bench prints its own correctness sentinel; just check
-          # it doesn't crash or hang. PROTOCLJ-style "self-report"
-          # rule from sibling repos — don't trust silent success.
+          # Each benchmark prints its computed result to stdout; this step
+          # only checks that every binary exits 0 without crashing or
+          # hanging.
           for b in build_release/bench_*; do
             bn=$(basename "$b")
             # Skip multithread benches: they're long and noisy on CI.
