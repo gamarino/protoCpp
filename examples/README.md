@@ -1,6 +1,6 @@
 # protoCpp examples
 
-Each file is a single-translation-unit demo of one protoCore feature, kept short on purpose (30 to 98 lines). The top-level `CMakeLists.txt` builds every `examples/*.cpp` file as an executable named `example_<file name>`:
+Each file is a single-translation-unit demo of one protoCore feature, kept short on purpose (30 to 98 lines). The top-level `CMakeLists.txt` builds every `examples/*.cpp` file as an executable named `example_<file stem>`:
 
 ```bash
 cmake -B build_release -S . && cmake --build build_release

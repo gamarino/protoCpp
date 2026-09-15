@@ -2,7 +2,7 @@
 
 **The protoCore ceiling, in C++.**
 
-protoCpp uses [protoCore](https://github.com/numaes/protoCore) directly: plain C++20 drives the kernel through its public header. There is no interpreter, no bytecode loop and no symbol-table dispatch. The language runtimes built on protoCore ([protoJS](https://github.com/gamarino/protoJS), [protoPython](https://github.com/gamarino/protoPython), [protoST](https://github.com/gamarino/protoST), [protoClojure](https://github.com/gamarino/protoClojure)) each add a language layer on top of the kernel. protoCpp removes that layer, so its benchmark numbers reflect protoCore itself.
+protoCpp uses [protoCore](https://github.com/numaes/protoCore) directly: plain C++20 drives the kernel through its public header. There is no interpreter, no bytecode loop and no symbol-table dispatch. The language runtimes built on protoCore ([protoJS](https://github.com/gamarino/protoJS), [protoPython](https://github.com/gamarino/protoPython), [protoST](https://github.com/gamarino/protoST), [protoClojure](https://github.com/gamarino/protoClojure)) each add a language layer on top of the kernel. protoCpp removes that layer, so its benchmark numbers exclude any language layer.
 
 It serves two purposes:
 
@@ -17,7 +17,7 @@ It serves two purposes:
    - a pure C++ version that does not link protoCore (the language floor)
    - a protoCpp version that does the same work through the kernel
 
-   `int_sum_loop`, `call_recursion` and `multithread_cpu` also have a fast-path variant that uses the inline SmallInt helpers. The ratio between the C++ and protoCpp versions is the cost of going through the kernel. The gap between protoCpp and a language runtime is the cost of the language layer.
+   `int_sum_loop`, `call_recursion` and `multithread_cpu` also have a fast-path variant that uses the inline SmallInt helpers. The ratio between the C++ and protoCpp versions is intended to show the cost of going through the kernel, and the gap between protoCpp and a language runtime the cost of the language layer. [`RESULTS.md`](RESULTS.md) describes what the current measurements can and cannot show.
 
 ## What "no overhead" does not mean
 
@@ -66,23 +66,23 @@ Each row pairs `bench_cpp_<name>` (pure C++ floor) with `bench_proto_<name>` (pr
 
 ## Results
 
-[`RESULTS.md`](RESULTS.md) has the full table, measured on 2026-06-15 on an AMD Ryzen 5 5500U laptop. Its columns are C++ floor, protoCpp, protoCpp with fast path, protopy, protopyc and CPython. All protoCore users link against the same `libprotoCore.so`. In that measurement:
+[`RESULTS.md`](RESULTS.md) has the full table, measured on 2026-06-15 on an AMD Ryzen 5 5500U laptop. Its columns are C++ floor, protoCpp, protoCpp with fast path, protopy, protopyc and CPython. protoCpp, protopy and protopyc link against the same `libprotoCore.so`. All values are whole-process wall times. In that measurement:
 
-- **protoCpp is faster than CPython** on the five benchmarks with a CPython measurement at the same problem size:
+- **In whole-process wall time, protoCpp finishes before CPython** on the five benchmarks with a CPython measurement at the same problem size:
   - `call_recursion`: 1.04× faster
   - `attr_lookup`: 1.96× faster
   - `list_append_loop`: 1.99× faster
   - `str_concat_loop`: 2.39× faster
   - `multithread_cpu`: 14.33× faster, on four native threads
 
-  `int_sum_loop` has no CPython value at the same size.
-- **Going through the kernel** costs 3.87× to 32.60× the time of plain C++ doing the same work.
+  `int_sum_loop` has no CPython value at the same size. CPython's `startup_empty` median in the same report (64.75 ms) is longer than its `call_recursion`, `list_append_loop` and `str_concat_loop` times, so on those three rows the CPython value is dominated by interpreter start-up rather than by the workload. The C++ and Python columns also come from different harnesses and separate runs.
+- **Going through the kernel** costs 3.87× to 32.60× the time of plain C++ doing the same work (whole-process wall time, including ProtoSpace start-up).
 - **The inline SmallInt helpers** cut protoCpp wall time by 58.9% on `call_recursion` (51.45 → 21.16 ms), 42.0% on `int_sum_loop` and 18.4% on `multithread_cpu`.
-- **The Python runtimes on the same kernel are slower than CPython** on these benchmarks:
+- **The Python runtimes on the same kernel are slower than CPython** on these benchmarks, excluding `int_sum_loop`, whose Python values are dominated by a module import added to the script just before the source report:
   - protopy: 1.19× to ≈5.66× slower
   - protopyc: 1.09× to 6.05× slower, on the rows where its value is valid and measured at the same size
 
-  protoCpp beats CPython on the same workloads, so the remaining gap sits mainly in the language layer rather than in protoCore.
+  At these sizes the Python timings include interpreter start-up and, for scripts that import `os`, module loading, so this table does not show where the Python runtimes' remaining cost lies.
 
 ## Layout
 
@@ -109,6 +109,8 @@ protoCpp/
 ```
 
 ## Related projects
+
+Four language runtimes (protoJS, protoPython, protoST, protoClojure) and protoCpp's C++ examples are built on protoCore.
 
 | Project | Role | Repository |
 |---|---|---|

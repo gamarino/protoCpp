@@ -1,6 +1,6 @@
 name: ci
 
-# Build-only CI. Compiles protoCore, then protoCpp (all examples and
+# Build-and-smoke CI. Compiles protoCore, then protoCpp (all examples and
 # every benchmark binary), and runs each example end-to-end. The
 # benchmark suite is not run here — GitHub-hosted runners share CPU with
 # other tenants, so wall-clock numbers from CI would be misleading
@@ -54,16 +54,16 @@ jobs:
             "$e"
           done
 
-      - name: Smoke — every benchmark binary at least starts and exits 0
+      - name: Smoke — each single-thread benchmark binary starts and exits 0
         working-directory: protoCpp
         run: |
           set -e
           # Each benchmark prints its computed result to stdout; this step
-          # only checks that every binary exits 0 without crashing or
-          # hanging.
+          # only checks that each single-thread binary exits 0 within 30
+          # seconds, without crashing or hanging.
           for b in build_release/bench_*; do
             bn=$(basename "$b")
-            # Skip multithread benches: they're long and noisy on CI.
+            # Skip multithread benches: they are long and noisy on CI.
             case "$bn" in *multithread_cpu*) continue ;; esac
             echo "=== $bn ==="
             timeout 30 "$b" > /dev/null
