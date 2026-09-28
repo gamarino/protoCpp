@@ -2,6 +2,11 @@
 
 **Measurement date: 2026-06-15.** This is a dated snapshot. All ratios and geomeans below were recomputed from the raw timings on 2026-09-15.
 
+**Re-measured 2026-09-27: the kernel-cost column only.** See
+[The kernel cost, re-measured against protoCore 2.5.0](#the-kernel-cost-re-measured-against-protocore-250)
+at the end of this file. The CPython and Python-runtime comparisons below were
+**not** re-run and remain the 2026-06-15 snapshot.
+
 ## Setup
 
 - **Hardware**: AMD Ryzen 5 5500U (6 cores, 12 threads, laptop class), Linux x86_64.
@@ -134,3 +139,54 @@ Absolute numbers depend on hardware. Ratios transfer better, but they also vary 
 3. The CPython version and build are not recorded. Other CPython builds (free-threading, PGO/LTO), or PyPy, would give different numbers.
 4. Every value is a single median. No run-to-run variance was recorded. Re-run on your own hardware before drawing conclusions.
 5. Every value is whole-process wall time, and the C++ and Python columns come from different harnesses and separate runs. On short rows the timings are dominated by interpreter or ProtoSpace start-up rather than by the workload (see the start-up note above).
+
+## The kernel cost, re-measured against protoCore 2.5.0
+
+**Measurement date: 2026-09-27.** protoCore **2.5.0** (SOVERSION 3), `Release`,
+`benchmarks/bench.sh` as published (median of 5 runs per binary, wall clock
+around each process, no warm-up). Only the C++ floor / kernel / fast-path columns
+were re-run; nothing involving CPython or the Python runtimes was, so the tables
+above stand as the 2026-06-15 snapshot for those.
+
+| bench | C++ floor | through the kernel | fast path | kernel / C++ | fast / C++ |
+|---|---:|---:|---:|---:|---:|
+| `int_sum_loop` | 6.96 ms | 73.03 ms | 46.25 ms | 10.49× | 6.65× |
+| `call_recursion` | 3.07 ms | 35.41 ms | 15.14 ms | 11.53× | 4.93× |
+| `attr_lookup` | 7.19 ms | 178.46 ms | — | 24.82× | — |
+| `list_append_loop` | 4.57 ms | 16.85 ms | — | 3.69× | — |
+| `str_concat_loop` | 4.20 ms | 16.25 ms | — | 3.87× | — |
+| `multithread_cpu` | 4.58 ms | 26.88 ms | 20.41 ms | 5.87× | 4.46× |
+
+**Going through the kernel costs 3.69× to 24.82×** the time of plain C++ doing the
+same work. The 2026-06-15 range was **3.87× to 32.60×**: the worst cell improved by
+about a quarter and the best did not move, which is consistent with three months of
+work on attribute lookup rather than on allocation. `attr_lookup` remains the worst
+cell by a wide margin, which is where a prototype chain is expected to cost most.
+
+**The inline SmallInt helpers** cut kernel wall time by **57.2%** on
+`call_recursion` (35.41 → 15.14 ms), **36.7%** on `int_sum_loop` (73.03 → 46.25 ms)
+and **24.1%** on `multithread_cpu` (26.88 → 20.41 ms).
+
+### What was verified, and the gap this run exposed in the runner
+
+Each binary was run once outside the timing loop and its output inspected. All
+twelve exit **0**, and **every C++/kernel pair prints an identical result** —
+`int_sum_loop` 49999995000000, `call_recursion` 75025, `attr_lookup` 30000000,
+`list_append_loop` 10000, `str_concat_loop` 2000, `multithread_cpu`
+7999996000000 — as does each fast-path variant against its plain counterpart. So
+the fast path's saving is a faster route to the same answer, not a skipped
+workload.
+
+That check was done **by hand**, and it should not have to be:
+`benchmarks/bench.sh` times each binary with `> /dev/null 2>&1`, so it discards
+the very output that proves the work happened and would time a crashed process as
+a fast one. The binaries self-report; the runner does not verify. That is a
+departure from the family's own rule and is recorded here rather than left for the
+next person to discover.
+
+**Conditions, stated rather than implied:** load average 1.46 → 1.51 on 12 logical
+CPUs, so this is a working machine and not an idle one. Read the **ratios**, which
+survive contention; the absolute milliseconds would move on a quiet host. The
+binaries link `libprotoCore.so.3` from the workspace build
+(`../protoCore/build_release`), verified with `ldd` — the same 2.5.0 source as the
+installed package, resolved from the sibling tree because CMake prefers it.
