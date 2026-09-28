@@ -2,7 +2,7 @@
 
 **The protoCore ceiling, in C++.**
 
-protoCpp uses [protoCore](https://github.com/numaes/protoCore) directly: plain C++20 drives the kernel through its public header. There is no interpreter, no bytecode loop and no symbol-table dispatch. The language runtimes built on protoCore ([protoJS](https://github.com/gamarino/protoJS), [protoPython](https://github.com/gamarino/protoPython), [protoST](https://github.com/gamarino/protoST), [protoClojure](https://github.com/gamarino/protoClojure)) each add a language layer on top of the kernel. protoCpp removes that layer, so its benchmark numbers exclude any language layer.
+protoCpp uses [protoCore](https://github.com/numaes/protoCore) directly: plain C++20 drives the kernel through its public header. There is no interpreter, no bytecode loop and no symbol-table dispatch. The language runtimes built on protoCore ([protoJS](https://github.com/gamarino/protoJS), [protoPython](https://github.com/gamarino/protoPython), [protoST](https://github.com/gamarino/protoST), [protoClojure](https://github.com/gamarino/protoClojure), [protoScala](https://github.com/gamarino/protoScala)) each add a language layer on top of the kernel. protoCpp removes that layer, so its benchmark numbers exclude any language layer.
 
 It serves two purposes:
 
@@ -110,7 +110,7 @@ protoCpp/
 
 ## Related projects
 
-Four language runtimes (protoJS, protoPython, protoST, protoClojure) and protoCpp's C++ examples are built on protoCore.
+Five language runtimes (protoJS, protoPython, protoST, protoClojure, protoScala) and protoCpp's C++ examples are built on protoCore.
 
 | Project | Role | Repository |
 |---|---|---|
@@ -119,6 +119,7 @@ Four language runtimes (protoJS, protoPython, protoST, protoClojure) and protoCp
 | protoPython | Python 3 runtime (protopy) and ahead-of-time compiler (protopyc) on protoCore | https://github.com/gamarino/protoPython |
 | protoST | Smalltalk-inspired actor language on protoCore | https://github.com/gamarino/protoST |
 | protoClojure | Clojure dialect on protoCore (early stage) | https://github.com/gamarino/protoClojure |
+| protoScala | Dynamic Scala 3 dialect on protoCore (early stage) | https://github.com/gamarino/protoScala |
 | protoCpp | Examples and benchmarks using protoCore directly from C++ | https://github.com/gamarino/protoCpp |
 
 ## License
