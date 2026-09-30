@@ -121,6 +121,7 @@ Five language runtimes (protoJS, protoPython, protoST, protoClojure, protoScala)
 | protoClojure | Clojure dialect on protoCore (early stage) | https://github.com/gamarino/protoClojure |
 | protoScala | Dynamic Scala 3 dialect on protoCore (early stage) | https://github.com/gamarino/protoScala |
 | protoCpp | Examples and benchmarks using protoCore directly from C++ | https://github.com/gamarino/protoCpp |
+| protoIO | Shared input and output for the runtimes: files, processes, TCP, UDP, TLS and HTTP/1.1 (used by protoST, protoScala and protoClojure) | https://github.com/gamarino/protoIO |
 
 ## License
 
