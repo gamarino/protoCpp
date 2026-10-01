@@ -10,6 +10,10 @@ RUNS=5
 if [[ ! -d "$BUILD" ]]; then
     echo "build dir not found: $BUILD" >&2; exit 2
 fi
+# On Windows the programs are in the build tree's bin/ (next to protoCore.dll).
+if [[ -d "$BUILD/bin" ]]; then
+    BUILD="$BUILD/bin"
+fi
 
 # List of bench stems. Each must have a `bench_cpp_<stem>` and a
 # `bench_proto_<stem>` binary in $BUILD.
