@@ -1,0 +1,95 @@
+name: cross-platform
+
+# The smoke test of ci.yml (every example runs, every single-thread benchmark
+# starts and exits 0) on macOS and Windows, against an INSTALLED protoCore
+# package (-DCMAKE_PREFIX_PATH), the mode Windows supports.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The first protoCore commit that builds and passes on macOS and Windows.
+  PROTOCORE_REF: effba28b86aa9cf0e2227c1d4ff9ce8b2473717c
+
+jobs:
+  smoke:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple clang, arm64)
+            os: macos-14
+          - name: Windows (MSVC, x64)
+            os: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: protoCpp
+
+      - uses: actions/checkout@v4
+        with:
+          repository: numaes/protoCore
+          ref: ${{ env.PROTOCORE_REF }}
+          path: protoCore
+
+      - name: Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew list ninja >/dev/null 2>&1 || brew install ninja
+
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build and install protoCore
+        run: |
+          cmake -S protoCore -B protoCore/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build protoCore/build --parallel 4
+          cmake --install protoCore/build --prefix "$GITHUB_WORKSPACE/prefix"
+
+      - name: Build protoCpp
+        working-directory: protoCpp
+        run: |
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/prefix"
+          cmake --build build
+
+      - name: Smoke — run every example
+        working-directory: protoCpp
+        run: |
+          set -e
+          # Windows puts programs (and protoCore.dll) in build/bin.
+          dir=build; [ -d build/bin ] && dir=build/bin
+          export PATH="$GITHUB_WORKSPACE/prefix/bin:$PATH"
+          for e in "$dir"/example_*; do
+            [ -f "$e" ] || continue
+            echo "=== $(basename "$e") ==="
+            "$e"
+          done
+
+      - name: Smoke — each single-thread benchmark binary starts and exits 0
+        working-directory: protoCpp
+        run: |
+          set -e
+          dir=build; [ -d build/bin ] && dir=build/bin
+          export PATH="$GITHUB_WORKSPACE/prefix/bin:$PATH"
+          for b in "$dir"/bench_*; do
+            [ -f "$b" ] || continue
+            bn=$(basename "$b")
+            case "$bn" in *multithread_cpu*) continue ;; esac
+            echo "=== $bn ==="
+            "$b" > /dev/null
+          done
