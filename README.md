@@ -33,7 +33,7 @@ protoCpp's numbers therefore show what an application can achieve through protoC
 
 ## Build
 
-protoCpp expects [protoCore](https://github.com/numaes/protoCore) at `../protoCore`, or at the prefix given with `-DPROTO_CORE_PREFIX=<path>`. Build the kernel first, then this repository:
+protoCpp expects [protoCore](https://github.com/numaes/protoCore) at `../protoCore`, or at the prefix given with `-DPROTO_CORE_PREFIX=<path>`. An installed protoCore CMake package (`lib/cmake/protoCore`) is used when its prefix is named with `-DCMAKE_PREFIX_PATH=<prefix>`; system prefixes are not searched, so a configure that names no prefix keeps using `../protoCore`. Build the kernel first, then this repository:
 
 ```bash
 cd ../protoCore
@@ -42,6 +42,48 @@ cmake -B build_release -S . && cmake --build build_release --target protoCore
 cd ../protoCpp
 cmake -B build_release -S . && cmake --build build_release
 ```
+
+### Windows (MSVC)
+
+protoCpp builds and runs natively on Windows with Visual Studio 2022 (MSVC
+19.44 verified, Windows 11), using the CMake and Ninja that ship with it. Build
+protoCore first (its `docs/INSTALLATION.md`, "Windows (MSVC)") and install it
+into a prefix. From an "x64 Native Tools Command Prompt":
+
+```bat
+set PREFIX=%LOCALAPPDATA%\Programs\proto
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=%PREFIX%
+cmake --build build
+build\bin\example_01_hello
+cmake --install build --prefix C:\path\to\protocpp
+```
+
+`-DPROTO_CORE_PREFIX=%PREFIX%` works too; on Windows that prefix is read as a
+CMake package. The programs go to `build\bin\` together with a copy of
+`protoCore.dll`, so they run in place; `cmake --install` puts them and
+`protoCore.dll` in `<prefix>\bin`, which runs with nothing else on `PATH`.
+`benchmarks/bench.sh build` runs the benchmark table from Git Bash (it uses
+`build/bin` when present).
+
+How Windows differs, by design:
+
+- **Same output bytes everywhere.** Every program is built with
+  `windows/stdio_setup.cpp`, which puts the standard streams in binary mode
+  (`\n`, not `\r\n`) and switches the console to UTF-8, and with
+  `windows/utf8.manifest`, which makes UTF-8 the process code page. The
+  example and benchmark sources need no I/O setup of their own. Sizes
+  returned by protoCore (`proto::proto_ulong`, `unsigned long long` on Windows)
+  are printed with `PROTO_FMT_U`.
+- **Compiler flags.** MSVC gets `/W3 /utf-8` and, outside Debug, `/O2
+  /DNDEBUG`, in place of `-Wall -Wextra -Wpedantic -O3 -DNDEBUG`. An unset
+  `CMAKE_BUILD_TYPE` means Release, as on Linux.
+- **The pure C++ floors.** `bench_cpp_attr_lookup` and `bench_cpp_int_sum_loop`
+  stop the optimiser from folding their loops with `PROTOCPP_OPAQUE`
+  (`benchmarks/cpp/opaque.h`). With GCC and Clang it is the original empty
+  `asm volatile` barrier; MSVC x64 has no inline assembly, so there it is a
+  volatile store and load per use, which makes those two floors somewhat
+  slower. Compare Windows numbers with Windows numbers only; `RESULTS.md`
+  was measured on Linux.
 
 ## Run
 
