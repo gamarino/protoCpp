@@ -26,12 +26,12 @@ int main() {
     // "Mutate" the base by appending — base itself is untouched.
     const ProtoList* withTen = base->appendLast(ctx, ctx->fromLong(10));
 
-    std::printf("base size:    %lu\n", base->getSize(ctx));
-    std::printf("withTen size: %lu\n", withTen->getSize(ctx));
+    std::printf("base size:    %" PROTO_FMT_U "\n", base->getSize(ctx));
+    std::printf("withTen size: %" PROTO_FMT_U "\n", withTen->getSize(ctx));
     std::printf("base last:    %lld\n",
-        base->getAt(ctx, base->getSize(ctx) - 1)->asLong(ctx));
+        base->getAt(ctx, (int)base->getSize(ctx) - 1)->asLong(ctx));
     std::printf("withTen last: %lld\n",
-        withTen->getAt(ctx, withTen->getSize(ctx) - 1)->asLong(ctx));
+        withTen->getAt(ctx, (int)withTen->getSize(ctx) - 1)->asLong(ctx));
 
     // Crucially: building withTen did NOT copy the first 10 elements.
     // It allocated O(log N) new tree nodes that point back into base's

@@ -6,6 +6,6 @@ int main() {
     constexpr int N = 10000;
     std::vector<long long> lst;
     for (int i = 0; i < N; ++i) lst.push_back(i);
-    std::printf("%lu\n", lst.size());
+    std::printf("%zu\n", lst.size());
     return 0;
 }

@@ -20,6 +20,6 @@ int main() {
     for (int i = 0; i < N; ++i) {
         s = s->appendLast(ctx, x);
     }
-    std::printf("%lu\n", s->getSize(ctx));
+    std::printf("%" PROTO_FMT_U "\n", s->getSize(ctx));
     return 0;
 }

@@ -18,6 +18,6 @@ int main() {
     for (int i = 0; i < N; ++i) {
         lst = lst->appendLast(ctx, ctx->fromLong(i));
     }
-    std::printf("%lu\n", lst->getSize(ctx));
+    std::printf("%" PROTO_FMT_U "\n", lst->getSize(ctx));
     return 0;
 }

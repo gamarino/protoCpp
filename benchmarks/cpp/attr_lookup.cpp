@@ -3,10 +3,12 @@
 // IMPORTANT: -O3 trivially proves obj.a/b/c are loop-invariant constants
 // and folds the entire loop to `total = N * (a+b+c)`. That would make
 // this "floor" a `printf("constant")` benchmark with no attribute work.
-// The asm volatile barrier after each += forces the compiler to
+// The PROTOCPP_OPAQUE barrier (opaque.h) after each += forces the compiler to
 // materialise `total` as if it were used externally on every iteration,
 // which keeps the load + add visible to the measurement.
 #include <cstdio>
+
+#include "opaque.h"
 
 struct FastObject {
     long long a, b, c;
@@ -22,11 +24,11 @@ int main() {
     long long total = 0;
     for (long long i = 0; i < N; ++i) {
         total += obj.a;
-        asm volatile("" : "+r"(total) :: "memory");
+        PROTOCPP_OPAQUE(total);
         total += obj.b;
-        asm volatile("" : "+r"(total) :: "memory");
+        PROTOCPP_OPAQUE(total);
         total += obj.c;
-        asm volatile("" : "+r"(total) :: "memory");
+        PROTOCPP_OPAQUE(total);
     }
     std::printf("%lld\n", total);
     return 0;

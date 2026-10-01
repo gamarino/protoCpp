@@ -21,7 +21,7 @@ int main() {
     }
 
     std::printf("[");
-    for (unsigned long i = 0; i < lst->getSize(ctx); ++i) {
+    for (proto_ulong i = 0; i < lst->getSize(ctx); ++i) {
         if (i > 0) std::printf(", ");
         std::printf("%lld", lst->getAt(ctx, (int)i)->asLong(ctx));
     }

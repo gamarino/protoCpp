@@ -7,6 +7,6 @@ int main() {
     constexpr int N = 2000;
     std::string s;
     for (int i = 0; i < N; ++i) s = s + "x";
-    std::printf("%lu\n", s.size());
+    std::printf("%zu\n", s.size());
     return 0;
 }
