@@ -1,4 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
+
+# On Windows, CMake's MSVC platform files default an unset CMAKE_BUILD_TYPE
+# to Debug during project(), which would hide it from the Release default
+# below: give it before project() there.
+if(CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type")
+endif()
+
 project(protoCpp VERSION 0.1.0 LANGUAGES CXX)
 
 # Default to Release so casual builds are -O3. Override with
@@ -91,8 +99,9 @@ include_directories(${PROTOCORE_INCLUDE_DIRS})
 # -O3 + no asserts for the bench numbers. -Wall to catch obvious mistakes.
 if(MSVC)
     # Same intent under MSVC: optimise, no asserts, warnings on. Sources are
-    # UTF-8.
-    add_compile_options(/W3 /O2 /DNDEBUG /utf-8)
+    # UTF-8. A Debug build keeps MSVC's /Od /RTC1 (/O2 and /RTC1 cannot be
+    # combined).
+    add_compile_options(/W3 /utf-8 "$<$<NOT:$<CONFIG:Debug>>:/O2;/DNDEBUG>")
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -O3 -DNDEBUG)
 endif()
