@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — verified results, protoCore 2.9.0, 2026-10-02
+
+- **Every program's result is verified.** `ctest` runs each example and
+  benchmark and compares its output byte-for-byte with
+  `tests/expected/<program>.out` (closed-form values); before, CI only
+  checked that each program exited 0, and skipped the multithread
+  benchmarks. A self-test requires the checker to reject a wrong value.
+  `benchmarks/bench.sh` checks each binary's result before timing it and
+  exits 1 on a wrong one.
+- **protoCore pinned to 2.9.0.** Both workflows build protoCore commit
+  `21889c91` (2.9.0 on master; no tag yet); `ci.yml` used unpinned master
+  before. On Windows, protoCore 2.9.0's DLL is `protoCore-3.dll`; protoCpp
+  copies and installs the file the imported target names. Windows now
+  requires the installed protoCore package: the bare `../protoCore`
+  build-tree fallback, which looked for a fixed `protoCore.dll`, is not used
+  there.
+- Compile options are set on protoCpp's own programs instead of the whole
+  directory (MSVC `/W3`, no warnings), and CI builds with warnings as errors.
+
 ### Added — Windows (MSVC), 2026-10-01
 
 - **Native Windows build.** Every example and benchmark builds with Visual

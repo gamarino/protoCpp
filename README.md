@@ -59,9 +59,15 @@ cmake --install build --prefix C:\path\to\protocpp
 ```
 
 `-DPROTO_CORE_PREFIX=%PREFIX%` works too; on Windows that prefix is read as a
-CMake package. The programs go to `build\bin\` together with a copy of
-`protoCore.dll`, so they run in place; `cmake --install` puts them and
-`protoCore.dll` in `<prefix>\bin`, which runs with nothing else on `PATH`.
+CMake package. Windows always needs the installed package: a bare
+`..\protoCore` build tree is not used there, because only the package's
+imported target knows the DLL's file name. The programs go to `build\bin\`
+together with a copy of protoCore's DLL, so they run in place; `cmake
+--install` puts them and the DLL in `<prefix>\bin`, which runs with nothing
+else on `PATH`. The DLL is whatever file the imported target
+`protoCore::protoCore` names (`$<TARGET_FILE>`), never a fixed name: from
+protoCore 2.9.0 it is `protoCore-3.dll`, the ABI (SOVERSION 3) in the file
+name, where earlier versions built `protoCore.dll`.
 `benchmarks/bench.sh build` runs the benchmark table from Git Bash (it uses
 `build/bin` when present).
 
@@ -74,8 +80,11 @@ How Windows differs, by design:
   example and benchmark sources need no I/O setup of their own. Sizes
   returned by protoCore (`proto::proto_ulong`, `unsigned long long` on Windows)
   are printed with `PROTO_FMT_U`.
-- **Compiler flags.** MSVC gets `/W3 /utf-8` and, outside Debug, `/O2
-  /DNDEBUG`, in place of `-Wall -Wextra -Wpedantic -O3 -DNDEBUG`. An unset
+- **Compiler flags.** protoCpp's own programs get `/W3 /utf-8` from MSVC
+  and, outside Debug, `/O2 /DNDEBUG`, in place of `-Wall -Wextra -Wpedantic
+  -O3 -DNDEBUG`. Warning level 3 includes the truncation warnings (C4244,
+  C4267); the build has none, and CI builds with
+  `-DCMAKE_COMPILE_WARNING_AS_ERROR=ON` so a new one fails. An unset
   `CMAKE_BUILD_TYPE` means Release, as on Linux.
 - **The pure C++ floors.** `bench_cpp_attr_lookup` and `bench_cpp_int_sum_loop`
   stop the optimiser from folding their loops with `PROTOCPP_OPAQUE`
@@ -104,7 +113,22 @@ Benchmarks:
 ./benchmarks/bench.sh          # median of 5 runs per binary
 ```
 
-Each row pairs `bench_cpp_<name>` (pure C++ floor) with `bench_proto_<name>` (protoCpp), plus `bench_proto_fast_<name>` where a fast-path variant exists. The script prints the median times and the protoCpp / C++ ratios.
+Each row pairs `bench_cpp_<name>` (pure C++ floor) with `bench_proto_<name>` (protoCpp), plus `bench_proto_fast_<name>` where a fast-path variant exists. The script prints the median times and the protoCpp / C++ ratios. Before timing a row it runs each binary once and compares what it prints with `tests/expected/<binary>.out`; a binary that prints a wrong result is reported as `** wrong result, not timed **` and the script exits 1.
+
+## Tests
+
+Every example and benchmark prints the result of the work it did: the list it built, a sum, `fib(25)`, an element count. `ctest` runs each program once and compares its standard output byte-for-byte with `tests/expected/<program>.out` (`tests/check_output.cmake`), so a program that exits 0 without doing its work, or computes a wrong value, fails. The expected values are closed-form results, identical on Linux, macOS and Windows. A new program needs its `tests/expected/<program>.out`, or configure fails.
+
+```bash
+ctest --test-dir build_release --output-on-failure
+```
+
+## Continuous integration
+
+- `ci.yml` (Linux, GCC) builds protoCore from source next to protoCpp, checks with `ldd` that the programs load that build, and runs `ctest`.
+- `cross-platform.yml` (macOS with Apple clang, Windows with MSVC) installs protoCore into a prefix, builds protoCpp against the package and runs `ctest` without the prefix on `PATH`. On Windows it also runs the installed `bin\` from a clean directory with only system directories on `PATH`.
+
+Both build protoCpp with warnings as errors and use the same pinned protoCore commit, `PROTOCORE_REF` in each workflow: currently `21889c91`, protoCore 2.9.0 on master (2.9.0 has no tag). Bump it in both files together, to a tag's commit when one exists, and re-run both workflows.
 
 ## Results
 
@@ -142,6 +166,10 @@ protoCpp/
 │   ├── 05_threads.cpp
 │   ├── 06_actor_manual.cpp
 │   └── README.md
+├── tests/
+│   ├── check_output.cmake  # runs one program, compares its output
+│   ├── expected/           # <program>.out: the exact result each prints
+│   └── selftest/           # a wrong expectation the checker must reject
 └── benchmarks/
     ├── bench.sh
     ├── cpp/        # pure C++ floor, no protoCore link
