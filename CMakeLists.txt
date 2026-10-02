@@ -210,6 +210,35 @@ if(WIN32)
     endif()
 endif()
 
+# --- Smoke tests (ctest) -------------------------------------------------------
+# Every example and benchmark prints the result of its work; each test runs one
+# program and compares its standard output byte-for-byte with
+# tests/expected/<program>.out (tests/check_output.cmake), so a program that
+# exits 0 without doing its work, or prints a wrong result, fails. A program
+# without an expected-output file is a configure error: nothing is built that
+# the smoke test does not verify. The protoCore programs find protoCore through
+# the build rpath (Linux, macOS) or the DLL copied next to them (Windows).
+enable_testing()
+foreach(program ${PROTOCPP_PROGRAMS})
+    set(expected "${CMAKE_CURRENT_SOURCE_DIR}/tests/expected/${program}.out")
+    if(NOT EXISTS "${expected}")
+        message(FATAL_ERROR
+            "${program} has no expected output: add tests/expected/${program}.out "
+            "with the exact result it must print.")
+    endif()
+    add_test(NAME smoke_${program}
+        COMMAND ${CMAKE_COMMAND} "-DPROGRAM=$<TARGET_FILE:${program}>"
+                "-DEXPECTED=${expected}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_output.cmake")
+endforeach()
+# The checker itself must reject a wrong result: run it against a deliberately
+# wrong expectation (fib(25) is 75025, the file says 75026) and require failure.
+add_test(NAME smoke_selftest_rejects_wrong_result
+    COMMAND ${CMAKE_COMMAND} "-DPROGRAM=$<TARGET_FILE:bench_cpp_call_recursion>"
+            "-DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/tests/selftest/wrong_result.out"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_output.cmake")
+set_tests_properties(smoke_selftest_rejects_wrong_result PROPERTIES WILL_FAIL TRUE)
+
 message(STATUS "protoCpp ${PROJECT_VERSION}")
 message(STATUS "  protoCore lib: ${PROTOCORE_LIBRARY}")
 message(STATUS "  protoCore inc: ${PROTOCORE_INCLUDE_DIRS}")

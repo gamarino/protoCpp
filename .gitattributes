@@ -1,3 +1,7 @@
 # Shell scripts run under bash on every platform (Git Bash on Windows):
 # keep them LF in the working tree.
 *.sh text eol=lf
+# Expected program output is compared byte-for-byte on every platform:
+# keep it LF in the working tree (a CRLF checkout would never match).
+tests/expected/*.out text eol=lf
+tests/selftest/*.out text eol=lf
