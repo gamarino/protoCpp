@@ -26,6 +26,33 @@ BENCHES=(
     multithread_cpu
 )
 
+# Expected output of every program (the same files ctest compares against).
+EXPECTED_DIR="$(dirname "$0")/../tests/expected"
+FAILED=0
+
+# Run a binary once and compare what it prints with
+# tests/expected/<binary>.out. A benchmark that exits 0 without doing its
+# work, or computes a wrong result, must not produce a timing row.
+verify() {
+    local bin="$1" name expected actual
+    name=$(basename "$bin")
+    name="${name%.exe}"
+    expected="$EXPECTED_DIR/$name.out"
+    if [[ ! -f "$expected" ]]; then
+        echo "$name: no expected output ($expected)" >&2
+        return 1
+    fi
+    if ! actual=$("$bin" 2>/dev/null); then
+        echo "$name: exited with a failure status" >&2
+        return 1
+    fi
+    # $(...) strips trailing newlines on both sides of the comparison.
+    if [[ "$actual" != "$(cat "$expected")" ]]; then
+        echo "$name: wrong result: got '$actual', expected '$(cat "$expected")'" >&2
+        return 1
+    fi
+}
+
 # Run a binary N times, print median ms to stdout.
 median_ms() {
     local bin="$1"
@@ -53,6 +80,13 @@ for b in "${BENCHES[@]}"; do
     fast_bin="$BUILD/bench_proto_fast_$b"
     if [[ ! -x "$cpp_bin" || ! -x "$pr_bin" ]]; then
         printf "%-20s ** missing binary **\n" "$b"
+        FAILED=1
+        continue
+    fi
+    if ! verify "$cpp_bin" || ! verify "$pr_bin" ||
+       { [[ -x "$fast_bin" ]] && ! verify "$fast_bin"; }; then
+        printf "%-20s ** wrong result, not timed **\n" "$b"
+        FAILED=1
         continue
     fi
     cpp_ms=$(median_ms "$cpp_bin")
@@ -70,3 +104,5 @@ for b in "${BENCHES[@]}"; do
     printf "%-20s %-9s %-9s %-9s %-9s %-9s\n" \
         "$b" "$cpp_ms" "$pr_ms" "$fast_ms" "$pr_ratio" "$fast_ratio"
 done
+
+exit "$FAILED"
