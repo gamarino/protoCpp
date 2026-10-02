@@ -128,7 +128,7 @@ ctest --test-dir build_release --output-on-failure
 - `ci.yml` (Linux, GCC) builds protoCore from source next to protoCpp, checks with `ldd` that the programs load that build, and runs `ctest`.
 - `cross-platform.yml` (macOS with Apple clang, Windows with MSVC) installs protoCore into a prefix, builds protoCpp against the package and runs `ctest` without the prefix on `PATH`. On Windows it also runs the installed `bin\` from a clean directory with only system directories on `PATH`.
 
-Both build protoCpp with warnings as errors and use the same pinned protoCore commit, `PROTOCORE_REF` in each workflow: currently `21889c91`, protoCore 2.9.0 on master (2.9.0 has no tag). Bump it in both files together, to a tag's commit when one exists, and re-run both workflows.
+Both build protoCpp with warnings as errors and use the same pinned protoCore commit, `PROTOCORE_REF` in each workflow: currently `9cb0ef54`, protoCore 2.9.4 (tag `v2.9.4`). Bump it in both files together, to a tag's commit, and re-run both workflows. protoCpp declares no minimum protoCore version (`find_package(protoCore)` takes none), so no job tests an older protoCore.
 
 ## Results
 

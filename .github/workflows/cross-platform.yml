@@ -18,9 +18,9 @@ permissions:
 env:
   # protoCore is pinned so a protoCpp run is reproducible; ci.yml uses the
   # same commit. Bump both together (README.md, "Continuous integration").
-  # This is the protoCore 2.9.0 master commit (no v2.9.0 tag); its Windows DLL
-  # is protoCore-3.dll.
-  PROTOCORE_REF: 21889c911b0d0c69bb99d53ea8c3b1bb349f547d
+  # This is protoCore 2.9.4 (tag v2.9.4); its Windows DLL is protoCore-3.dll.
+  # protoCpp declares no minimum protoCore version, so there is no floor job.
+  PROTOCORE_REF: 9cb0ef540826ee6c3162998db84ddf48464d6e2a
 
 jobs:
   smoke:

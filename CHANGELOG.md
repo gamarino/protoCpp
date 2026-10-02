@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — protoCore 2.9.4 in CI, 2026-10-02
+
+- **protoCore pinned to 2.9.4.** Both workflows build protoCore tag `v2.9.4`
+  (`9cb0ef54`) instead of the untagged 2.9.0 commit `21889c91`. protoCpp
+  declares no minimum protoCore version, so there is no floor job.
+
 ### Changed — verified results, protoCore 2.9.0, 2026-10-02
 
 - **Every program's result is verified.** `ctest` runs each example and
