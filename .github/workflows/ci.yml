@@ -1,8 +1,9 @@
 name: ci
 
 # Build-and-smoke CI. Compiles protoCore, then protoCpp (all examples and
-# every benchmark binary), and runs each example end-to-end. The
-# benchmark suite is not run here — GitHub-hosted runners share CPU with
+# every benchmark binary, warnings as errors), and runs every program once
+# through ctest, which compares what it prints with tests/expected/. The
+# timed benchmark suite is not run here — GitHub-hosted runners share CPU with
 # other tenants, so wall-clock numbers from CI would be misleading
 # and the published RESULTS.md numbers stay tied to the Ryzen 5 5500U
 # laptop they were measured on.
@@ -12,6 +13,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # protoCore is pinned so a protoCpp run is reproducible; the same commit is
+  # used by cross-platform.yml. Bump both together (README.md, "Continuous
+  # integration"). This is the protoCore 2.9.0 master commit (no v2.9.0 tag).
+  PROTOCORE_REF: 21889c911b0d0c69bb99d53ea8c3b1bb349f547d
 
 jobs:
   build-and-smoke:
@@ -26,6 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: numaes/protoCore
+          ref: ${{ env.PROTOCORE_REF }}
           path: protoCore
 
       - name: Install build deps
@@ -42,29 +54,11 @@ jobs:
       - name: Build protoCpp
         working-directory: protoCpp
         run: |
-          cmake -B build_release -S . -G Ninja
+          cmake -B build_release -S . -G Ninja -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           cmake --build build_release
+          # The programs must load the protoCore just built, not a system copy.
+          ldd build_release/example_01_hello | grep -F "$GITHUB_WORKSPACE/protoCore/build_release/libprotoCore.so"
 
-      - name: Smoke — run every example
+      - name: Smoke — every program prints its expected result
         working-directory: protoCpp
-        run: |
-          set -e
-          for e in build_release/example_*; do
-            echo "=== $(basename "$e") ==="
-            "$e"
-          done
-
-      - name: Smoke — each single-thread benchmark binary starts and exits 0
-        working-directory: protoCpp
-        run: |
-          set -e
-          # Each benchmark prints its computed result to stdout; this step
-          # only checks that each single-thread binary exits 0 within 30
-          # seconds, without crashing or hanging.
-          for b in build_release/bench_*; do
-            bn=$(basename "$b")
-            # Skip multithread benches: they are long and noisy on CI.
-            case "$bn" in *multithread_cpu*) continue ;; esac
-            echo "=== $bn ==="
-            timeout 30 "$b" > /dev/null
-          done
+        run: ctest --test-dir build_release --output-on-failure

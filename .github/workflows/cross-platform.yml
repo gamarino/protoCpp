@@ -1,8 +1,9 @@
 name: cross-platform
 
-# The smoke test of ci.yml (every example runs, every single-thread benchmark
-# starts and exits 0) on macOS and Windows, against an INSTALLED protoCore
-# package (-DCMAKE_PREFIX_PATH), the mode Windows supports.
+# The smoke test of ci.yml (ctest runs every example and benchmark once and
+# compares what it prints with tests/expected/) on macOS and Windows, against
+# an INSTALLED protoCore package (-DCMAKE_PREFIX_PATH), the mode Windows
+# supports.
 
 on:
   push:
@@ -15,8 +16,11 @@ permissions:
   contents: read
 
 env:
-  # The first protoCore commit that builds and passes on macOS and Windows.
-  PROTOCORE_REF: effba28b86aa9cf0e2227c1d4ff9ce8b2473717c
+  # protoCore is pinned so a protoCpp run is reproducible; ci.yml uses the
+  # same commit. Bump both together (README.md, "Continuous integration").
+  # This is the protoCore 2.9.0 master commit (no v2.9.0 tag); its Windows DLL
+  # is protoCore-3.dll.
+  PROTOCORE_REF: 21889c911b0d0c69bb99d53ea8c3b1bb349f547d
 
 jobs:
   smoke:
@@ -64,32 +68,26 @@ jobs:
       - name: Build protoCpp
         working-directory: protoCpp
         run: |
-          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/prefix"
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/prefix" -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           cmake --build build
 
-      - name: Smoke — run every example
+      # No protoCore directory on PATH: on Windows the programs must run with
+      # the DLL the build copied next to them (named by the imported target).
+      - name: Smoke — every program prints its expected result
         working-directory: protoCpp
-        run: |
-          set -e
-          # Windows puts programs (and protoCore.dll) in build/bin.
-          dir=build; [ -d build/bin ] && dir=build/bin
-          export PATH="$GITHUB_WORKSPACE/prefix/bin:$PATH"
-          for e in "$dir"/example_*; do
-            [ -f "$e" ] || continue
-            echo "=== $(basename "$e") ==="
-            "$e"
-          done
+        run: ctest --test-dir build --output-on-failure
 
-      - name: Smoke — each single-thread benchmark binary starts and exits 0
+      - name: Installed programs run from a clean directory (Windows)
+        if: runner.os == 'Windows'
         working-directory: protoCpp
         run: |
           set -e
-          dir=build; [ -d build/bin ] && dir=build/bin
-          export PATH="$GITHUB_WORKSPACE/prefix/bin:$PATH"
-          for b in "$dir"/bench_*; do
-            [ -f "$b" ] || continue
-            bn=$(basename "$b")
-            case "$bn" in *multithread_cpu*) continue ;; esac
-            echo "=== $bn ==="
-            "$b" > /dev/null
-          done
+          dest=$(cygpath -u "$RUNNER_TEMP")/protocpp
+          cmake --install build --prefix "$dest"
+          ls "$dest/bin"
+          cd "$dest"
+          # System directories only: nothing from the build tree or the
+          # protoCore prefix.
+          out=$(PATH="/c/Windows/system32:/c/Windows" "$dest/bin/example_01_hello.exe")
+          echo "$out"
+          [ "$out" = "$(cat "$GITHUB_WORKSPACE/protoCpp/tests/expected/example_01_hello.out")" ]
