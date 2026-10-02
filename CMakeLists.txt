@@ -25,7 +25,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(WIN32)
     # Windows has no rpath: a program finds its DLLs next to itself, so every
     # executable of the build goes to one directory, together with a copy of
-    # protoCore.dll (see protocpp_runtime_dlls below).
+    # protoCore's DLL (see protocpp_runtime_dlls below).
     if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
         set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
     endif()
@@ -68,6 +68,14 @@ else()
         message(FATAL_ERROR
             "PROTO_CORE_PREFIX=${PROTO_CORE_PREFIX} set but no protoCore CMake "
             "package (lib/cmake/protoCore) was found there.")
+    elseif(WIN32)
+        # The DLL's file name carries protoCore's ABI version (protoCore-3.dll
+        # since 2.9.0) and only the package's imported target knows it, so
+        # Windows does not use a bare build tree.
+        message(FATAL_ERROR
+            "protoCore CMake package not found. On Windows, install protoCore "
+            "(cmake --install <protoCore build> --prefix <prefix>) and configure "
+            "with -DCMAKE_PREFIX_PATH=<prefix>.")
     else()
         set(PROTOCORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../protoCore)
         find_library(PROTOCORE_LIBRARY NAMES protoCore
@@ -83,27 +91,20 @@ else()
         get_filename_component(PROTOCORE_LIB_DIR "${PROTOCORE_LIBRARY}" DIRECTORY)
         set(CMAKE_BUILD_RPATH "${PROTOCORE_LIB_DIR}")
         set(CMAKE_BUILD_RPATH_USE_LINK_PATH TRUE)
-        if(WIN32)
-            # PROTOCORE_LIBRARY is the import library; the DLL sits next to it
-            # or in the build tree's bin/.
-            find_file(PROTOCORE_DLL NAMES protoCore.dll
-                PATHS "${PROTOCORE_LIB_DIR}" "${PROTOCORE_LIB_DIR}/bin"
-                      "${PROTOCORE_LIB_DIR}/.." "${PROTOCORE_LIB_DIR}/../bin"
-                NO_DEFAULT_PATH)
-        endif()
     endif()
 endif()
 
 include_directories(${PROTOCORE_INCLUDE_DIRS})
 
 # -O3 + no asserts for the bench numbers. -Wall to catch obvious mistakes.
+# These options go on protoCpp's own programs only (protocpp_add_program).
 if(MSVC)
-    # Same intent under MSVC: optimise, no asserts, warnings on. Sources are
-    # UTF-8. A Debug build keeps MSVC's /Od /RTC1 (/O2 and /RTC1 cannot be
-    # combined).
-    add_compile_options(/W3 /utf-8 "$<$<NOT:$<CONFIG:Debug>>:/O2;/DNDEBUG>")
+    # Same intent under MSVC: optimise, no asserts, warning level 3 (which
+    # includes the truncation warnings C4244 and C4267). Sources are UTF-8. A
+    # Debug build keeps MSVC's /Od /RTC1 (/O2 and /RTC1 cannot be combined).
+    set(PROTOCPP_COMPILE_OPTIONS /W3 /utf-8 "$<$<NOT:$<CONFIG:Debug>>:/O2;/DNDEBUG>")
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -O3 -DNDEBUG)
+    set(PROTOCPP_COMPILE_OPTIONS -Wall -Wextra -Wpedantic -O3 -DNDEBUG)
 endif()
 
 # Windows only: every executable gets the UTF-8 process code page (manifest)
@@ -116,27 +117,31 @@ if(WIN32)
         "${CMAKE_CURRENT_SOURCE_DIR}/windows/stdio_setup.cpp")
 endif()
 
-# Windows finds a DLL next to the program that loads it: copy protoCore.dll
-# into the build's bin/ with a target every protoCore program depends on.
+# Windows finds a DLL next to the program that loads it: copy protoCore's DLL
+# into the build's bin/ with a target every protoCore program depends on. The
+# file is the imported target's location ($<TARGET_FILE>), never a hard-coded
+# name: protoCore 2.9.0 names it protoCore-<SOVERSION>.dll (protoCore-3.dll).
 set(PROTOCPP_RUNTIME_DLLS "")
 if(WIN32)
-    if(TARGET protoCore::protoCore)
-        set(PROTOCPP_RUNTIME_DLLS "$<TARGET_FILE:protoCore::protoCore>")
-    elseif(PROTOCORE_DLL)
-        set(PROTOCPP_RUNTIME_DLLS "${PROTOCORE_DLL}")
-    endif()
-    if(PROTOCPP_RUNTIME_DLLS)
-        add_custom_target(protocpp_runtime_dlls
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROTOCPP_RUNTIME_DLLS}
-                    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-            VERBATIM)
-    endif()
+    set(PROTOCPP_RUNTIME_DLLS "$<TARGET_FILE:protoCore::protoCore>")
+    add_custom_target(protocpp_runtime_dlls
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROTOCPP_RUNTIME_DLLS}
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        VERBATIM)
 endif()
 
 set(PROTOCPP_PROGRAMS "")
 
-# Link a program against protoCore (and, on Windows, have protoCore.dll
+# Add one of protoCpp's programs: a single source file plus the platform
+# sources, built with protoCpp's compile options.
+function(protocpp_add_program target src)
+    add_executable(${target} ${src} ${PROTOCPP_PLATFORM_SOURCES})
+    target_compile_options(${target} PRIVATE ${PROTOCPP_COMPILE_OPTIONS})
+    set(PROTOCPP_PROGRAMS ${PROTOCPP_PROGRAMS} ${target} PARENT_SCOPE)
+endfunction()
+
+# Link a program against protoCore (and, on Windows, have protoCore's DLL
 # copied next to it before it is built).
 function(protocpp_link_protocore target)
     target_link_libraries(${target} PRIVATE ${PROTOCORE_LIBRARY})
@@ -152,9 +157,8 @@ file(GLOB EXAMPLE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.cpp")
 foreach(src ${EXAMPLE_SOURCES})
     get_filename_component(name ${src} NAME_WE)
-    add_executable(example_${name} ${src} ${PROTOCPP_PLATFORM_SOURCES})
+    protocpp_add_program(example_${name} ${src})
     protocpp_link_protocore(example_${name})
-    list(APPEND PROTOCPP_PROGRAMS example_${name})
 endforeach()
 
 # --- Benchmarks --------------------------------------------------------------
@@ -166,19 +170,17 @@ file(GLOB CPP_BENCH_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/cpp/*.cpp")
 foreach(src ${CPP_BENCH_SOURCES})
     get_filename_component(name ${src} NAME_WE)
-    add_executable(bench_cpp_${name} ${src} ${PROTOCPP_PLATFORM_SOURCES})
+    protocpp_add_program(bench_cpp_${name} ${src})
     # Pure C++ benches don't link protoCore (that's the whole point —
     # they're the floor).
-    list(APPEND PROTOCPP_PROGRAMS bench_cpp_${name})
 endforeach()
 
 file(GLOB PROTO_BENCH_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/proto/*.cpp")
 foreach(src ${PROTO_BENCH_SOURCES})
     get_filename_component(name ${src} NAME_WE)
-    add_executable(bench_proto_${name} ${src} ${PROTOCPP_PLATFORM_SOURCES})
+    protocpp_add_program(bench_proto_${name} ${src})
     protocpp_link_protocore(bench_proto_${name})
-    list(APPEND PROTOCPP_PROGRAMS bench_proto_${name})
 endforeach()
 
 # proto_fast — SmallInt fast-path variants. They use the inline
@@ -191,23 +193,20 @@ file(GLOB PROTO_FAST_BENCH_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/proto_fast/*.cpp")
 foreach(src ${PROTO_FAST_BENCH_SOURCES})
     get_filename_component(name ${src} NAME_WE)
-    add_executable(bench_proto_fast_${name} ${src} ${PROTOCPP_PLATFORM_SOURCES})
+    protocpp_add_program(bench_proto_fast_${name} ${src})
     protocpp_link_protocore(bench_proto_fast_${name})
-    list(APPEND PROTOCPP_PROGRAMS bench_proto_fast_${name})
 endforeach()
 
 # --- Install (Windows) ---------------------------------------------------------
 # `cmake --install <build> --prefix <dir>` gives a self-contained bin/: the
-# programs and the protoCore.dll they load. Elsewhere the build tree is the
+# programs and the protoCore DLL they load. Elsewhere the build tree is the
 # deliverable, as before (the programs find libprotoCore through the build
 # rpath, which an install would strip).
 if(WIN32)
     install(TARGETS ${PROTOCPP_PROGRAMS}
         RUNTIME DESTINATION bin COMPONENT protoCpp)
-    if(PROTOCPP_RUNTIME_DLLS)
-        install(FILES ${PROTOCPP_RUNTIME_DLLS}
-            DESTINATION bin COMPONENT protoCpp)
-    endif()
+    install(FILES ${PROTOCPP_RUNTIME_DLLS}
+        DESTINATION bin COMPONENT protoCpp)
 endif()
 
 # --- Smoke tests (ctest) -------------------------------------------------------
