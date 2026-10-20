@@ -6,13 +6,14 @@ protoCpp uses [protoCore](https://github.com/numaes/protoCore) directly: plain C
 
 It serves two purposes:
 
-1. **A reference for embedders.** Six short examples (30 to 98 lines each) cover the primitives a C++ application uses to drive protoCore:
+1. **A reference for embedders.** Seven short examples (30 to 98 lines each) cover the primitives a C++ application uses to drive protoCore:
    - building and reading a list
    - SmallInt arithmetic with the inline fast-path helpers
    - atomic compare-and-swap on a mutable attribute
    - persistent collections with structural sharing
    - OS threads managed by protoCore
    - a hand-built one-actor system
+   - one method called three ways: with lists, with arrays the caller owns, and passing on the descriptors it received (protoCore 3.0.0's calling convention)
 2. **A protoCore performance ceiling.** Each benchmark has two versions:
    - a pure C++ version that does not link protoCore (the language floor)
    - a protoCpp version that does the same work through the kernel
@@ -30,6 +31,15 @@ protoCpp removes the language overhead only. It **still pays for**:
 - Atomic (compare-and-swap) updates of mutable objects.
 
 protoCpp's numbers therefore show what an application can achieve through protoCore's public C++ API without a language runtime. They do not show the performance of hand-written C++ that does not use protoCore at all. The `bench_cpp_*` binaries measure that, for reference.
+
+## Requirements
+
+protoCpp's sources follow protoCore **3.0.0**'s calling convention: a method
+reads its arguments through `ProtoArguments` / `ProtoKeywordArguments`
+descriptors (protoCore `docs/CALLING_CONVENTION.md`). The thread entry points
+of `examples/05_threads.cpp`, `examples/06_actor_manual.cpp` and the two
+`multithread_cpu` benchmarks have that signature, so a protoCore 2.x does not
+build them.
 
 ## Build
 
@@ -66,8 +76,8 @@ together with a copy of protoCore's DLL, so they run in place; `cmake
 --install` puts them and the DLL in `<prefix>\bin`, which runs with nothing
 else on `PATH`. The DLL is whatever file the imported target
 `protoCore::protoCore` names (`$<TARGET_FILE>`), never a fixed name: from
-protoCore 2.9.0 it is `protoCore-3.dll`, the ABI (SOVERSION 3) in the file
-name, where earlier versions built `protoCore.dll`.
+protoCore 3.0.0 it is `protoCore-4.dll`, the ABI (SOVERSION 4) in the file
+name; 2.9.0 to 2.14.x built `protoCore-3.dll`, earlier versions `protoCore.dll`.
 `benchmarks/bench.sh build` runs the benchmark table from Git Bash (it uses
 `build/bin` when present).
 
@@ -105,6 +115,7 @@ Examples:
 ./build_release/example_04_structural_sharing
 ./build_release/example_05_threads
 ./build_release/example_06_actor_manual
+./build_release/example_07_call_forms
 ```
 
 Benchmarks:
@@ -128,7 +139,7 @@ ctest --test-dir build_release --output-on-failure
 - `ci.yml` (Linux, GCC) builds protoCore from source next to protoCpp, checks with `ldd` that the programs load that build, and runs `ctest`.
 - `cross-platform.yml` (macOS with Apple clang, Windows with MSVC) installs protoCore into a prefix, builds protoCpp against the package and runs `ctest` without the prefix on `PATH`. On Windows it also runs the installed `bin\` from a clean directory with only system directories on `PATH`.
 
-Both build protoCpp with warnings as errors and use the same pinned protoCore commit, `PROTOCORE_REF` in each workflow: currently `9cb0ef54`, protoCore 2.9.4 (tag `v2.9.4`). Bump it in both files together, to a tag's commit, and re-run both workflows. protoCpp declares no minimum protoCore version (`find_package(protoCore)` takes none), so no job tests an older protoCore.
+Both build protoCpp with warnings as errors and use the same pinned protoCore commit, `PROTOCORE_REF` in each workflow: currently `cf52f9f5`, protoCore 3.0.0 (branch `feature/args-calling-convention`, not yet tagged). Bump it in both files together, to a tag's commit, and re-run both workflows. protoCpp declares no minimum protoCore version (`find_package(protoCore)` takes none), so no job tests an older protoCore.
 
 ## Results
 

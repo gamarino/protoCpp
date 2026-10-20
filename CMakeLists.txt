@@ -70,8 +70,8 @@ else()
             "package (lib/cmake/protoCore) was found there.")
     elseif(WIN32)
         # The DLL's file name carries protoCore's ABI version (protoCore-3.dll
-        # since 2.9.0) and only the package's imported target knows it, so
-        # Windows does not use a bare build tree.
+        # from 2.9.0, protoCore-4.dll from 3.0.0) and only the package's
+        # imported target knows it, so Windows does not use a bare build tree.
         message(FATAL_ERROR
             "protoCore CMake package not found. On Windows, install protoCore "
             "(cmake --install <protoCore build> --prefix <prefix>) and configure "
@@ -120,7 +120,8 @@ endif()
 # Windows finds a DLL next to the program that loads it: copy protoCore's DLL
 # into the build's bin/ with a target every protoCore program depends on. The
 # file is the imported target's location ($<TARGET_FILE>), never a hard-coded
-# name: protoCore 2.9.0 names it protoCore-<SOVERSION>.dll (protoCore-3.dll).
+# name: protoCore names it protoCore-<SOVERSION>.dll since 2.9.0 (protoCore-4.dll
+# from 3.0.0).
 set(PROTOCPP_RUNTIME_DLLS "")
 if(WIN32)
     set(PROTOCPP_RUNTIME_DLLS "$<TARGET_FILE:protoCore::protoCore>")

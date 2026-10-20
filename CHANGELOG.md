@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — protoCore 3.0.0, 2026-10-20
+
+- **Builds against protoCore 3.0.0** (SOVERSION 4; CI pins `cf52f9f5` in both
+  workflows; its Windows DLL is `protoCore-4.dll`).  A method reads its
+  arguments through `ProtoArguments` / `ProtoKeywordArguments` descriptors:
+  the thread entry points of `examples/05_threads.cpp`,
+  `examples/06_actor_manual.cpp` and both `multithread_cpu` benchmarks take
+  them.  README states the requirement.
+- **New example `07_call_forms.cpp`**: one method, `sum(a, b, ..., scale =
+  s)`, called by the list form, the array form (arguments in the caller
+  context's automatic locals, keywords as `ProtoKeywordArgument` pairs) and
+  the descriptor form; `tests/expected/example_07_call_forms.out` checks it.
+- **`RESULTS.md`: the kernel cost re-measured against protoCore 3.0.0**,
+  alternating with 2.14.8 in the same rounds (unchanged within the spread:
+  kernel / C++ 2.35x to 17.13x, against 3.87x to 32.60x in June), and the
+  cost of a call in each call form.
+
 ### Changed — protoCore 2.9.4 in CI, 2026-10-02
 
 - **protoCore pinned to 2.9.4.** Both workflows build protoCore tag `v2.9.4`

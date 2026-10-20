@@ -2,6 +2,12 @@
 
 **Measurement date: 2026-06-15.** This is a dated snapshot. All ratios and geomeans below were recomputed from the raw timings on 2026-09-15.
 
+**Re-measured 2026-10-20 against protoCore 3.0.0: the kernel-cost column, and
+the cost of a call in each of 3.0.0's call forms.** See
+[The kernel cost, re-measured against protoCore 3.0.0](#the-kernel-cost-re-measured-against-protocore-300)
+at the end of this file; it supersedes the 2.5.0 section below it for the C++
+floor / kernel / fast-path columns.
+
 **Re-measured 2026-09-27: the kernel-cost column only.** See
 [The kernel cost, re-measured against protoCore 2.5.0](#the-kernel-cost-re-measured-against-protocore-250)
 at the end of this file. The CPython and Python-runtime comparisons below were
@@ -190,3 +196,52 @@ survive contention; the absolute milliseconds would move on a quiet host. The
 binaries link `libprotoCore.so.3` from the workspace build
 (`../protoCore/build_release`), verified with `ldd` — the same 2.5.0 source as the
 installed package, resolved from the sibling tree because CMake prefers it.
+
+## The kernel cost, re-measured against protoCore 3.0.0
+
+**Measurement date: 2026-10-20.** protoCore **3.0.0** (SOVERSION 4, commit
+`cf52f9f5`), `Release`, against protoCore **2.14.8** at the same moment:
+`benchmarks/bench.sh`, which verifies each binary's result before timing it,
+three rounds alternating the two builds (protoCpp `main` on 2.14.8, this
+branch on 3.0.0), each round behind a quiet gate (1.2 to 2.1 busy CPUs of 12);
+the median of the three rounds' medians. As before, nothing involving CPython
+or the Python runtimes was re-run.
+
+| bench | C++ floor | kernel, 2.14.8 | kernel, 3.0.0 | change | fast path, 2.14.8 -> 3.0.0 | kernel / C++, 3.0.0 |
+|---|---:|---:|---:|---:|---:|---:|
+| `int_sum_loop` | 10.10 ms | 80.82 ms | 82.64 ms | +2.3 % | 50.4 -> 44.9 ms | 8.18x |
+| `call_recursion` | 7.53 ms | 20.74 ms | 20.64 ms | -0.5 % | 19.9 -> 19.8 ms | 2.74x |
+| `attr_lookup` | 11.63 ms | 199.01 ms | 199.25 ms | +0.1 % | -- | 17.13x |
+| `list_append_loop` | 8.29 ms | 21.88 ms | 21.98 ms | +0.5 % | -- | 2.65x |
+| `str_concat_loop` | 8.28 ms | 21.54 ms | 19.45 ms | -9.7 % | -- | 2.35x |
+| `multithread_cpu` | 8.42 ms | 30.40 ms | 29.86 ms | -1.8 % | 24.9 -> 24.1 ms | 3.55x |
+
+**3.0.0 leaves these six unchanged** within the run-to-run spread (single-round
+outliers of up to 276 ms on `attr_lookup` 2.14.8 were absorbed by the median):
+none of them calls a method with a fresh argument list, which is what 3.0.0
+changes. **Going through the kernel now costs 2.35x to 17.13x** plain C++,
+against 3.69x to 24.82x on 2.5.0 (2026-09-27) and 3.87x to 32.60x on
+2026-06-15; `call_recursion` went from 12.83x (June) to 2.74x. The C++ floors
+read higher than in September (7.53 against 3.07 ms for `call_recursion`):
+the machine, not the code, since both columns of each row ran in the same
+rounds.
+
+### The cost of a call in each call form
+
+protoCore 3.0.0 has one method type and two ways to call it
+(`examples/07_call_forms.cpp`, protoCore `docs/CALLING_CONVENTION.md`).
+protoCore's own C++ floor (`identity` method, one argument, 3.54 GHz, best of 5
+runs of 4,000,000 calls, default heap), as recorded in protoCore's
+`docs/CALLING_CONVENTION.md`:
+
+| call | 2.14.8 | 3.0.0 list form | 3.0.0 array form |
+|---|---:|---:|---:|
+| by name, arguments reused | 22.8 ns | 22-25 ns | 18.5-19.6 ns |
+| + the callee's context | 53.0 ns | 53-57 ns | 47-51 ns |
+| fresh arguments every call, with caller and callee contexts | 209 ns (a new 1-element list) | 217-221 ns | 63-66 ns |
+
+The array form removes the list a caller builds for every call; the
+runtimes that call natives with fresh arguments gain from it (protoScala's
+`copy` -39 % to -42 % cycles, protoClojure's `tak` -26 %, on their own
+benchmarks).
+

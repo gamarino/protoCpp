@@ -26,8 +26,8 @@ static const ProtoObject* drainerMain(
         ProtoContext* ctx,
         const ProtoObject*,
         const ParentLink*,
-        const ProtoList* args,
-        const ProtoSparseList*) {
+        const ProtoArguments* args,
+        const ProtoKeywordArguments*) {
     auto* mb = reinterpret_cast<Mailbox*>(
         args->getAt(ctx, 0)->asLong(ctx));
 

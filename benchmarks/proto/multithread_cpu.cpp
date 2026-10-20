@@ -18,8 +18,8 @@ static const ProtoObject* workerMain(
         ProtoContext* ctx,
         const ProtoObject*,
         const ParentLink*,
-        const ProtoList* args,
-        const ProtoSparseList*) {
+        const ProtoArguments* args,
+        const ProtoKeywordArguments*) {
     auto* cell = const_cast<ProtoObject*>(args->getAt(ctx, 0));
     const ProtoObject* total = ctx->fromLong(0);
     for (long long i = 0; i < CHUNK; ++i) {

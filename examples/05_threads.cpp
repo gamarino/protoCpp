@@ -2,9 +2,11 @@
 //
 // `ProtoSpace::newThread` creates a real OS thread that participates
 // in the GC quorum. The thread runs a ProtoMethod (a C function
-// pointer with a specific signature), receives positional args via a
-// ProtoList, and returns a ProtoObject. No GIL; native threading
-// model is the kernel's model.
+// pointer with a specific signature): newThread takes its arguments as a
+// ProtoList, which the thread keeps alive, and the method reads them
+// through a ProtoArguments descriptor, as every method does (protoCore
+// 3.0.0, docs/CALLING_CONVENTION.md). No GIL; native threading model is
+// the kernel's model.
 
 #include "protoCore.h"
 #include <cstdio>
@@ -20,8 +22,8 @@ static const ProtoObject* workerMain(
         ProtoContext* ctx,
         const ProtoObject* /*self*/,
         const ParentLink*,
-        const ProtoList* args,
-        const ProtoSparseList*) {
+        const ProtoArguments* args,
+        const ProtoKeywordArguments*) {
     if (!args || args->getSize(ctx) < 2) return PROTO_NONE;
     auto* resultCell = const_cast<ProtoObject*>(args->getAt(ctx, 0));
     long long x = args->getAt(ctx, 1)->asLong(ctx);
