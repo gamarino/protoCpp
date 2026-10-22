@@ -21,11 +21,11 @@ permissions:
 env:
   # protoCore is pinned so a protoCpp run is reproducible; the same commit is
   # used by cross-platform.yml. Bump both together (README.md, "Continuous
-  # integration"). This is protoCore 3.0.0 (cf52f9f, branch
-  # feature/args-calling-convention), whose methods read their arguments
+  # integration"). This is protoCore 3.0.0 (tag v3.0.0,
+  # commit ce00a4a2), whose methods read their arguments
   # through ProtoArguments descriptors. protoCpp declares no minimum protoCore
   # version, so there is no floor job.
-  PROTOCORE_REF: cf52f9f5056919bb07326afc7159d5b3d78c03a3
+  PROTOCORE_REF: ce00a4a26b6583ea8a58e776eee2ea91c743469e
 
 jobs:
   build-and-smoke:

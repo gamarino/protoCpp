@@ -6,10 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-22
+
+First tagged release. **Requires protoCore 3.0.0** (SOVERSION 4). Source only: protoCpp has no CPack packaging, and its build declares no minimum protoCore version. CI pins protoCore tag `v3.0.0` in both workflows.
+
 ### Changed — protoCore 3.0.0, 2026-10-20
 
-- **Builds against protoCore 3.0.0** (SOVERSION 4; CI pins `cf52f9f5` in both
-  workflows; its Windows DLL is `protoCore-4.dll`).  A method reads its
+- **Builds against protoCore 3.0.0** (SOVERSION 4; CI pins tag `v3.0.0`,
+  `ce00a4a2`, in both workflows; its Windows DLL is `protoCore-4.dll`).  A method reads its
   arguments through `ProtoArguments` / `ProtoKeywordArguments` descriptors:
   the thread entry points of `examples/05_threads.cpp`,
   `examples/06_actor_manual.cpp` and both `multithread_cpu` benchmarks take
