@@ -126,6 +126,35 @@ Benchmarks:
 
 Each row pairs `bench_cpp_<name>` (pure C++ floor) with `bench_proto_<name>` (protoCpp), plus `bench_proto_fast_<name>` where a fast-path variant exists. The script prints the median times and the protoCpp / C++ ratios. Before timing a row it runs each binary once and compares what it prints with `tests/expected/<binary>.out`; a binary that prints a wrong result is reported as `** wrong result, not timed **` and the script exits 1.
 
+## Debugging in VS Code
+
+protoCpp is plain C++, so it needs no adapter of its own: VS Code debugs it
+with Microsoft's C/C++ debugger, and you step from the examples into
+protoCore's public header like any other C++ library.
+
+1. Install the extensions **C/C++** (`ms-vscode.cpptools`) and **CMake Tools**
+   (`ms-vscode.cmake-tools`):
+
+   ```bash
+   code --install-extension ms-vscode.cpptools
+   code --install-extension ms-vscode.cmake-tools
+   ```
+
+2. Open the repository folder. In CMake Tools pick a kit (on Windows the
+   Visual Studio 2022 x64 one) and the **RelWithDebInfo** build type: an
+   installed protoCore is a Release build, and on Windows a Debug build would
+   link a different C runtime (`/MDd`) than protoCore's (`/MD`). If protoCore
+   is not in a default location, add `-DCMAKE_PREFIX_PATH=<its prefix>` to
+   `cmake.configureArgs` in your settings.
+3. Select the program to debug as the CMake launch target (status bar), set a
+   breakpoint in `examples/*.cpp`, and press **F5** with one of the two
+   configurations in [`.vscode/launch.json`](.vscode/launch.json): `cppvsdbg`
+   on Windows, `cppdbg` (gdb on Linux, lldb on macOS) elsewhere.
+
+Locals that hold protoCore objects show as raw pointers
+(`const proto::ProtoList*`); call their accessors in the Watch panel
+(`lst->getSize(ctx)`) to read them.
+
 ## Tests
 
 Every example and benchmark prints the result of the work it did: the list it built, a sum, `fib(25)`, an element count. `ctest` runs each program once and compares its standard output byte-for-byte with `tests/expected/<program>.out` (`tests/check_output.cmake`), so a program that exits 0 without doing its work, or computes a wrong value, fails. The expected values are closed-form results, identical on Linux, macOS and Windows. A new program needs its `tests/expected/<program>.out`, or configure fails.
