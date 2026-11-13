@@ -216,7 +216,8 @@ int main() {
             uint64_t k = collect(base, buf.data());
             // balanced build bottom-up, one 64 B node per element (as buildBalancedFromArray)
             struct B { AvlList& L; const AvlNode* build(const Value* v, uint64_t m) {
-                if (!m) return nullptr; uint64_t mid = m / 2;
+                if (!m) return nullptr;
+                const uint64_t mid = m / 2;
                 const AvlNode* l = build(v, mid); const AvlNode* r = build(v + mid + 1, m - mid - 1);
                 return L.mk(v[mid], l, r); } } b{avl};
             g_sink = b.build(buf.data(), k); });
