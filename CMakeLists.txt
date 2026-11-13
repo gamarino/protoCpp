@@ -243,3 +243,16 @@ message(STATUS "protoCpp ${PROJECT_VERSION}")
 message(STATUS "  protoCore lib: ${PROTOCORE_LIBRARY}")
 message(STATUS "  protoCore inc: ${PROTOCORE_INCLUDE_DIRS}")
 message(STATUS "  Build type:    ${CMAKE_BUILD_TYPE}")
+
+# --- Cost model ----------------------------------------------------------------
+# costmodel/: steady-state cost per primitive, measured in-process (no start-up
+# in the numbers), plus a design lab for protoCore's immutable structures that
+# does not link protoCore. Run with costmodel/run.sh.
+protocpp_add_program(costmodel_kernel costmodel/kernel_costmodel.cpp)
+protocpp_link_protocore(costmodel_kernel)
+protocpp_add_program(costmodel_list_lab costmodel/list_lab.cpp)
+protocpp_add_program(costmodel_string_lab costmodel/string_lab.cpp)
+protocpp_add_program(costmodel_list_ops_kernel costmodel/list_ops_kernel.cpp)
+protocpp_link_protocore(costmodel_list_ops_kernel)
+protocpp_add_program(costmodel_list_ops_lab costmodel/list_ops_lab.cpp)
+protocpp_add_program(costmodel_rrb_lab costmodel/rrb_lab.cpp)
