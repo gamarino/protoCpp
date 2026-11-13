@@ -68,8 +68,8 @@ def ratio(a, b):
 
 env = dict(l.rstrip("\n").split("=", 1) for l in open(os.path.join(out, "env.txt")))
 loads = [dict(kv.split("=", 1) for kv in l.split()[1:]) for l in open(os.path.join(out, "load.txt"))]
-max_load = float(env["max_load"])
-loaded = [l for l in loads if float(l["before"]) > max_load or float(l["after"]) > max_load + 1.0]
+max_busy = float(env["max_busy"])
+loaded = [l for l in loads if float(l["busy"]) > max_busy]
 
 kernel, capi, interp = agg(rounds("kernel")), agg(rounds("capi")), agg(rounds("interp"))
 list_ops, list_ops_lab = agg(rounds("list_ops")), agg(rounds("list_ops_lab"))
@@ -81,10 +81,12 @@ print(f'- CPU: {env["cpu"]}, {env["cpus"]} logical CPUs; governor {env["governor
 print(f'- protoCore: `{env["protocore_lib"]}` (sha256 {env["protocore_lib_sha256"][:12]}), a fresh copy per round')
 print(f'- CPython: {env["python"]} (GIL enabled: {env["python_gil"]})')
 print(f'- Compilers: {env["cxx"]}; {env["cc"]}')
+bz = [float(l["busy"]) for l in loads]
 lb = [float(l["before"]) for l in loads]
-print(f'- Load average (1 min) before each program: {min(lb):.2f}–{max(lb):.2f} (gate {max_load})')
+print(f'- Machine busy before each program (5 s of /proc/stat, all CPUs): {min(bz):.1f}–{max(bz):.1f} % (gate {max_busy:g} %); '
+      f'load average {min(lb):.2f}–{max(lb):.2f} (not used as the gate: ZFS kernel threads inflate it)')
 if loaded:
-    print(f'- **WARNING: {len(loaded)} of {len(loads)} program runs started or ended above the load gate; treat the figures as noisy.**')
+    print(f'- **WARNING: {len(loaded)} of {len(loads)} program runs started above the busy gate; treat the figures as noisy.**')
 print()
 
 ROWS = [
